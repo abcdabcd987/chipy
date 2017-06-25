@@ -20,7 +20,10 @@ enum class ValueType
     List,
     Dictionary,
     Iterator,
-    Tuple
+    Tuple,
+    Alias,
+    Module,
+    Function
 };
 
 class Value
@@ -48,6 +51,11 @@ public:
     virtual bool is_callable() const
     {
         return false;
+    }
+
+    virtual bool bool_test() const
+    {
+        return true;
     }
 
     void drop()
@@ -85,6 +93,177 @@ public:
         return ValueType::Iterator;
     }
 };
+
+class Tuple : public Value
+{
+public:
+    Tuple(Value *first, Value *second)
+        : m_first(first), m_second(second)
+    {
+        m_first->raise();
+        m_second->raise();
+    }
+
+    ~Tuple()
+    {
+        m_first->drop();
+        m_second->drop();
+    }
+
+    ValueType type() const override
+    {
+        return ValueType::Tuple;
+    }
+
+    Value* duplicate() const
+    {
+        return new Tuple(m_first, m_second);
+    }
+
+    Value* first()
+    {
+        return m_first;
+    }
+
+    Value* second()
+    {
+        return m_second;
+    }
+
+private:
+    Value *m_first;
+    Value *m_second;
+};
+
+template<typename value_type, ValueType value_type_val>
+class PlainValue : public Value
+{
+public:
+    PlainValue(value_type val)
+        : m_value(val)
+    {}
+
+    ValueType type() const override
+    {
+        return value_type_val;
+    }
+
+    const value_type& get() const
+    {
+        return m_value;
+    }
+
+    void set(const value_type &v)
+    {
+        m_value = v;
+    }
+
+protected:
+    value_type m_value;
+};
+
+class Alias : public Value
+{
+public:
+    Alias(const std::string& name, const std::string &as_name)
+        : m_name(name), m_as_name(as_name)
+    {}
+
+    ValueType type() const override
+    {
+        return ValueType::Alias;
+    }
+
+    Value* duplicate() const
+    {
+        return new Alias(name(), as_name());
+    }
+
+    const std::string name() const { return m_name; }
+    const std::string as_name() const { return m_as_name; }
+
+private:
+    const std::string m_name, m_as_name;
+};
+
+class BoolVal : public PlainValue<bool, ValueType::Bool>
+{
+public:
+    BoolVal(bool val) : PlainValue(val) {}
+    Value* duplicate() const { return new BoolVal(m_value); }
+
+    bool bool_test() const override { return m_value; }
+};
+
+class StringVal : public PlainValue<std::string, ValueType::String>
+{
+public:
+    StringVal(const std::string &val) : PlainValue(val) {}
+    Value* duplicate() const { return new StringVal(m_value); }
+};
+
+class FloatVal : public PlainValue<double, ValueType::Float>
+{
+public:
+    FloatVal(const double &val) : PlainValue(val) {}
+    Value* duplicate() const { return new FloatVal(m_value); }
+};
+
+class IntVal : public PlainValue<int32_t, ValueType::Integer>
+{
+public:
+    IntVal(const int32_t &val) : PlainValue(val) {}
+    Value* duplicate() const { return new IntVal(m_value); }
+
+    bool bool_test() const override { return m_value != 0; }
+};
+
+class value_exception {};
+
+template<typename T>
+T* value_cast(Value *val)
+{
+    auto res = dynamic_cast<T*>(val);
+    if(res == nullptr)
+        throw value_exception();
+
+    return res;
+}
+
+
+inline bool operator>(const Value &first, const Value &second)
+{
+    if(first.type() == ValueType::Integer && second.type() == ValueType::Integer)
+    {
+        return dynamic_cast<const IntVal&>(first).get() > dynamic_cast<const IntVal&>(second).get();
+    }
+    else
+        return false;
+}
+
+inline bool operator>=(const Value &first, const Value &second)
+{
+    if(first.type() == ValueType::Integer && second.type() == ValueType::Integer)
+    {
+        return dynamic_cast<const IntVal&>(first).get() >= dynamic_cast<const IntVal&>(second).get();
+    }
+    else
+        return false;
+}
+
+inline bool operator==(const Value &first, const Value &second)
+{
+    if(first.type() == ValueType::String && second.type() == ValueType::String)
+    {
+        return dynamic_cast<const StringVal&>(first).get() == dynamic_cast<const StringVal&>(second).get();
+    }
+    else if(first.type() == ValueType::Integer && second.type() == ValueType::Integer)
+    {
+        return dynamic_cast<const IntVal&>(first).get() == dynamic_cast<const IntVal&>(second).get();
+    }
+    else
+        return false;
+}
 
 class Generator : public Iterator
 {
@@ -185,40 +364,12 @@ private:
     std::map<std::string, Value*>::iterator m_it;
 };
 
-struct CppArg
-{
-    CppArg(int32_t i)
-        : Type(Integer), IntVal(i)
-    {}
-
-    CppArg(const std::string& str)
-        : Type(String), StrVal(str)
-    {}
-
-    CppArg(const std::vector<std::string> &list)
-        : Type(List), ListVal(list)
-    {}
-
-    ~CppArg()
-    {}
-
-    const enum arg_t { Integer, String, List } Type;
-
-    union
-    {
-        const std::string StrVal;
-        const std::vector<std::string> ListVal;
-        const int32_t IntVal;
-    };
-};
-
-
 class CppObject
 {
 public:
     virtual ~CppObject() {}
 
-    virtual Value* call_function(const std::string &func_name, const std::vector<CppArg*>& args) = 0;
+    virtual Value* call_function(const std::string &func_name, const std::vector<Value*> &args) = 0;
 };
 
 class Dictionary : public IterateableValue
@@ -242,6 +393,8 @@ public:
     Value* duplicate() const override;
 
     std::map<std::string, Value*>& elements();
+
+    const std::map<std::string, Value*>& elements() const;
 
 private:
     std::map<std::string, Value*> m_elements;
@@ -287,6 +440,8 @@ private:
     std::vector<Value*> m_elements;
 };
 
+json::Document value_to_bdoc(const Value &value);
+
 Value* create_integer(const int32_t value);
 Value* create_document(const json::Document &doc);
 Value* create_string(const std::string &str);
@@ -295,7 +450,5 @@ Value* create_float(const double &f);
 Value* create_boolean(const bool value);
 Value* create_list(const std::vector<std::string> &list);
 Value* create_none();
-
-Value* wrap_cpp_object(CppObject *obj);
 
 }

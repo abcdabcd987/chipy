@@ -30,6 +30,9 @@ private:
     Value* execute_next(Scope &scope, LoopState &loop_state);
     void skip_next();
 
+    void load_from_module(Scope &scope, const std::string &module, const std::string &name, const std::string &as_name);
+    void load_module(Scope &scope, const std::string &name, const std::string &as_name);
+
     std::string read_name();
     std::vector<std::string> read_names();
 

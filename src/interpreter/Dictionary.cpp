@@ -84,7 +84,10 @@ Iterator* DictItems::iterate()
     return new DictItemIterator(m_dict);
 }
 
-
+const std::map<std::string, Value*>& Dictionary::elements() const
+{
+    return m_elements;
+}
 
 std::map<std::string, Value*>& Dictionary::elements()
 {

@@ -2,6 +2,7 @@
 #include "chipy/NodeType.h"
 
 #include "pypa/reader.hh"
+#include "pypa/filebuf.hh"
 #include "pypa/lexer/lexer.hh"
 #include "pypa/ast/ast.hh"
 #include "pypa/parser/parser.hh"
@@ -117,6 +118,37 @@ private:
     {
         switch(stmt.type)
         {
+        case pypa::AstType::ImportFrom:
+        {
+            auto &import = reinterpret_cast<const pypa::AstImportFrom&>(stmt);
+            m_result << NodeType::ImportFrom;
+
+            parse_next(*import.module);
+            parse_next(*import.names);
+            break;
+        }
+        case pypa::AstType::Import:
+        {
+            auto &import = reinterpret_cast<const pypa::AstImport&>(stmt);
+            m_result << NodeType::Import;
+            parse_next(*import.names);
+            break;
+        }
+        case pypa::AstType::Alias:
+        {
+            auto &alias = reinterpret_cast<const pypa::AstAlias&>(stmt);
+            m_result << NodeType::Alias;
+            const std::string name = reinterpret_cast<const pypa::AstName&>(*alias.name).id.c_str();
+
+            if(alias.as_name)
+            {
+                const std::string as_name = reinterpret_cast<const pypa::AstName&>(*alias.as_name).id.c_str();
+                m_result << name << as_name;
+            }
+            else
+                m_result << name << std::string("");
+            break;
+        }
         case pypa::AstType::Name:
         {
             auto &exp = reinterpret_cast<const pypa::AstName&>(stmt);
@@ -292,6 +324,14 @@ private:
             parse_next(*loop.body);
             break;
         }
+        case pypa::AstType::While:
+        {
+            auto &loop = reinterpret_cast<const pypa::AstWhile&>(stmt);
+            m_result << NodeType::WhileLoop;
+            parse_next(*loop.test);
+            parse_next(*loop.body);
+            break;
+        }
         case pypa::AstType::AugAssign:
         {
             auto &ass = reinterpret_cast<const pypa::AstAugAssign&>(stmt);
@@ -329,7 +369,7 @@ private:
             }
             break;
         }
-        default:
+       default:
             throw std::runtime_error("Unknown statement type!");
         }
     }
@@ -339,6 +379,27 @@ private:
     BitStream m_result;
 };
 
+BitStream compile_file(const std::string &filename)
+{
+    pypa::AstModulePtr ast;
+    pypa::SymbolTablePtr symbols;
+    pypa::ParserOptions options;
+    options.python3only = true;
+    options.printerrors = true;
+    options.printdbgerrors = true;
+
+    pypa::Lexer lexer(std::unique_ptr<pypa::Reader>{new pypa::FileBufReader(filename)});
+
+    if(!pypa::parse(lexer, ast, symbols, options))
+    {
+        throw std::runtime_error("Parsing failed");
+    }
+
+    Compiler compiler(ast);
+    compiler.run();
+
+    return compiler.get_result();
+}
 BitStream compile_code(const std::string &code)
 {
     pypa::AstModulePtr ast;

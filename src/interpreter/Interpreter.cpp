@@ -4,6 +4,8 @@
 #include "chipy/Interpreter.h"
 #include <glog/logging.h>
 
+#include "modules/modules.h"
+
 namespace chipy
 {
 
@@ -55,136 +57,6 @@ enum class UnaryOpType
     Sub,
 };
 
-class Tuple : public Value
-{
-public:
-    Tuple(Value *first, Value *second)
-        : m_first(first), m_second(second)
-    {
-        m_first->raise();
-        m_second->raise();
-    }
-
-    ~Tuple()
-    {
-        m_first->drop();
-        m_second->drop();
-    }
-
-    ValueType type() const override
-    {
-        return ValueType::Tuple;
-    }
-
-    Value* duplicate() const
-    {
-        return new Tuple(m_first, m_second);
-    }
-
-    Value* first()
-    {
-        return m_first;
-    }
-
-    Value* second()
-    {
-        return m_second;
-    }
-
-private:
-    Value *m_first;
-    Value *m_second;
-};
-
-template<typename value_type, ValueType value_type_val>
-class PlainValue : public Value
-{
-public:
-    PlainValue(value_type val)
-        : m_value(val)
-    {}
-
-    ValueType type() const override
-    {
-        return value_type_val;
-    }
-
-    const value_type& get() const
-    {
-        return m_value;
-    }
-
-    void set(const value_type &v)
-    {
-        m_value = v;
-    }
-
-protected:
-    value_type m_value;
-};
-
-class BoolVal : public PlainValue<bool, ValueType::Bool>
-{
-public:
-    BoolVal(bool val) : PlainValue(val) {}
-    Value* duplicate() const { return new BoolVal(m_value); }
-};
-
-class StringVal : public PlainValue<std::string, ValueType::String>
-{
-public:
-    StringVal(const std::string &val) : PlainValue(val) {}
-    Value* duplicate() const { return new StringVal(m_value); }
-};
-
-class FloatVal : public PlainValue<double, ValueType::Float>
-{
-public:
-    FloatVal(const double &val) : PlainValue(val) {}
-    Value* duplicate() const { return new FloatVal(m_value); }
-};
-
-class IntVal : public PlainValue<int32_t, ValueType::Integer>
-{
-public:
-    IntVal(const int32_t &val) : PlainValue(val) {}
-    Value* duplicate() const { return new IntVal(m_value); }
-};
-
-bool operator>(const Value &first, const Value &second)
-{
-    if(first.type() == ValueType::Integer && second.type() == ValueType::Integer)
-    {
-        return dynamic_cast<const IntVal&>(first).get() > dynamic_cast<const IntVal&>(second).get();
-    }
-    else
-        return false;
-}
-
-bool operator>=(const Value &first, const Value &second)
-{
-    if(first.type() == ValueType::Integer && second.type() == ValueType::Integer)
-    {
-        return dynamic_cast<const IntVal&>(first).get() >= dynamic_cast<const IntVal&>(second).get();
-    }
-    else
-        return false;
-}
-
-bool operator==(const Value &first, const Value &second)
-{
-    if(first.type() == ValueType::String && second.type() == ValueType::String)
-    {
-        return dynamic_cast<const StringVal&>(first).get() == dynamic_cast<const StringVal&>(second).get();
-    }
-    else if(first.type() == ValueType::Integer && second.type() == ValueType::Integer)
-    {
-        return dynamic_cast<const IntVal&>(first).get() == dynamic_cast<const IntVal&>(second).get();
-    }
-    else
-        return false;
-}
-
 class CppAttribute : public Callable
 {
 public:
@@ -200,47 +72,7 @@ public:
 
     Value* call(const std::vector<Value*>& args) override
     {
-        // FIXME: use move semantics in the future
-        std::vector<CppArg*> cpp_args;
-
-        for(const Value* arg: args)
-        {
-            if(arg->type() == ValueType::Integer)
-            {
-                cpp_args.push_back(new CppArg{dynamic_cast<const IntVal*>(arg)->get()});
-            }
-            else if(arg->type() == ValueType::String)
-            {
-                cpp_args.push_back(new CppArg(dynamic_cast<const StringVal*>(arg)->get()));
-            }
-            else if(arg->type() == ValueType::List)
-            {
-                auto list = dynamic_cast<const List*>(arg);
-                std::vector<std::string> cpp_list;
-
-                for(auto val: list->elements())
-                {
-                    if(val->type() != ValueType::String)
-                        throw std::runtime_error("only string lists are supported for c++");
-
-                    cpp_list.push_back(dynamic_cast<const StringVal*>(val)->get());
-                }
-
-                cpp_args.push_back(new CppArg(cpp_list));
-            }
-
-            else
-                throw std::runtime_error("cannot convert arg to cpp_arg");
-        }
-
-        auto res = m_obj.call_function(m_name, cpp_args);
-
-        for(auto arg : cpp_args)
-        {
-            delete arg;
-        }
-
-        return res;
+        return m_obj.call_function(m_name, args);
     }
 
     Value* duplicate() const
@@ -407,7 +239,7 @@ public:
 
     Value* next() throw(stop_iteration_exception) override
     {
-        return m_obj->call_function("__next__", std::vector<CppArg*>{});
+        return m_obj->call_function("__next__", {});
     }
 
     CppAttribute* get_attribute(const std::string &name)
@@ -582,6 +414,34 @@ private:
     std::map<std::string, Value*> m_values;
 };
 
+void Interpreter::load_from_module(Scope &scope, const std::string &mname, const std::string &name, const std::string &as_name)
+{
+    Module *module = nullptr;
+
+    if(mname == "rand")
+    {
+        module = &g_module_rand;
+    }
+    else
+        throw std::runtime_error("Unknown module: " + mname);
+
+    scope.set_value(as_name == "" ? name: as_name, module->get_member(name));
+}
+
+void Interpreter::load_module(Scope &scope, const std::string &name, const std::string &as_name)
+{
+    Value *module = nullptr;
+
+    if(name == "rand")
+    {
+        module = &g_module_rand;
+    }
+    else
+        throw std::runtime_error("Unknown module: " + name);
+
+    scope.set_value(as_name == "" ? name: as_name, module);
+}
+
 bool Interpreter::execute()
 {
     LoopState loop_state = LoopState::None;
@@ -664,6 +524,31 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
 
     switch(type)
     {
+    case NodeType::ImportFrom:
+    {
+        auto module = read_name();
+    
+        auto val = execute_next(scope, dummy_loop_state);
+        auto alias = value_cast<Alias>(val);
+        load_from_module(scope, module, alias->name(), alias->as_name());
+        alias->drop();
+        break;
+    }
+    case NodeType::Import:
+    {
+        auto val = execute_next(scope, dummy_loop_state);
+        auto alias = value_cast<Alias>(val);
+        load_module(scope, alias->name(), alias->as_name());
+        alias->drop();
+        break;
+    }
+    case NodeType::Alias:
+    {
+        std::string name, as_name;
+        m_data >> name >> as_name;
+        returnval = new Alias(name, as_name);
+        break;
+    }
     case NodeType::Attribute:
     {
         Value *value = execute_next(scope, dummy_loop_state);
@@ -672,6 +557,10 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         if(value->type() == ValueType::CppObject)
         {
             returnval = dynamic_cast<CppObjectValue*>(value)->get_attribute(name);
+        }
+        else if(value->type() == ValueType::Module)
+        {
+            returnval = dynamic_cast<Module*>(value)->get_member(name);
         }
         else if(value->type() == ValueType::Dictionary && name == "items")
         {
@@ -1089,10 +978,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
     case NodeType::If:
     {
         auto test = execute_next(scope, loop_state);
-        if(test->type() != ValueType::Bool)
-            throw std::runtime_error("not a boolean!");
-
-        bool cond = dynamic_cast<BoolVal*>(test)->get();
+        bool cond = test->bool_test();
         test->drop();
 
         Value *res = nullptr;
@@ -1169,10 +1055,35 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
 
         break;
     }
+    case NodeType::WhileLoop:
+    {
+        LoopState for_loop_state = LoopState::TopLevel;
+        auto start = m_data.pos();
+ 
+        while(for_loop_state != LoopState::Break)
+        {
+            m_data.move_to(start);
+
+            auto test = execute_next(scope, dummy_loop_state);
+            bool cond = test && test->bool_test();
+            
+            if(test)
+                test->drop();
+
+            if(!cond)
+            {
+                skip_next();
+                break;
+            }
+
+            Scope body_scope(scope);
+            execute_next(body_scope, for_loop_state);
+        }
+        break;
+    }
     case NodeType::ForLoop:
     {
         std::vector<std::string> names = read_names();
-
         LoopState for_loop_state = LoopState::TopLevel;
 
         auto obj = execute_next(scope, dummy_loop_state);

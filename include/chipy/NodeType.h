@@ -25,9 +25,13 @@ enum class NodeType
     Subscript,
     Index,
     ForLoop,
+    WhileLoop,
     AugmentedAssign,
     Continue,
-    Break
+    Break,
+    Import,
+    ImportFrom,
+    Alias
 };
 
 }

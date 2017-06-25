@@ -10,7 +10,7 @@ class PythonTest : public testing::Test
 class FooObj : public CppObject
 {
 public:
-    Value* call_function(const std::string& funcname, const std::vector<CppArg*> &arguments) override
+    Value* call_function(const std::string& funcname, const std::vector<Value*> &arguments) override
     {
         return create_integer(42);
     }
@@ -19,14 +19,15 @@ public:
 class Foo2Obj : public CppObject
 {
 public:
-    Value* call_function(const std::string& funcname, const std::vector<CppArg*> &args) override
+    Value* call_function(const std::string& funcname, const std::vector<Value*> &args) override
     {
-        if(args.size() == 0 || args[0]->Type != CppArg::Integer)
+        if(args.size() == 0 || args[0]->type() != ValueType::Integer)
         {
             throw std::runtime_error("invalid argument(s)");
         }
 
-        return create_integer(2 * args[0]->IntVal);
+        auto i = dynamic_cast<IntVal*>(args[0]);
+        return create_integer(2 * i->get());
     }
 };
 
@@ -40,6 +41,49 @@ TEST(PythonTest, greater_than)
     Interpreter pyint(doc);
 
     EXPECT_TRUE(pyint.execute());
+}
+
+TEST(PythonTest, while_loop)
+{
+    const std::string code =
+            "i = 0\n"
+            "while i < 3:\n"
+            "   i += 1\n"
+            "return i == 3";
+
+    auto doc = compile_code(code);
+
+    Interpreter pyint(doc);
+    auto res = pyint.execute();
+    EXPECT_EQ(res, true);
+}
+
+TEST(PythonTest, rand)
+{
+    const std::string code =
+            "import rand\n"
+            "r = rand.randint(0,10)\n"
+            "return r >= 0 and r <= 10\n";
+
+    auto doc = compile_code(code);
+
+    Interpreter pyint(doc);
+    auto res = pyint.execute();
+    EXPECT_EQ(res, true);
+}
+
+TEST(PythonTest, rand2)
+{
+    const std::string code =
+            "from rand import randint\n"
+            "r = randint(0,10)\n"
+            "return r >= 0 and r <= 10\n";
+
+    auto doc = compile_code(code);
+
+    Interpreter pyint(doc);
+    auto res = pyint.execute();
+    EXPECT_EQ(res, true);
 }
 
 TEST(PythonTest, call_cpp_with_argument)
