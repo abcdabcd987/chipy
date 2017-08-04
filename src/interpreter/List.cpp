@@ -1,4 +1,4 @@
-#include "chipy/Value.h"
+#include "chipy/List.h"
 
 namespace chipy
 {
@@ -9,14 +9,14 @@ List::~List()
         elem->drop();
 }
 
-Iterator* List::iterate()
+IteratorPtr List::iterate()
 {
-    return new ListIterator(*this);
+    return new (memory_manager()) ListIterator(memory_manager(), *this);
 }
 
-Value* List::duplicate() const
+ValuePtr List::duplicate()
 {
-    auto d = new List();
+    auto d = new (memory_manager()) List(memory_manager());
 
     for(auto elem: m_elements)
     {
@@ -69,8 +69,8 @@ void List::append(Value *val)
     m_elements.push_back(val);
 }
 
-ListIterator::ListIterator(List &list)
-    : m_list(list), m_pos(0)
+ListIterator::ListIterator(MemoryManager &mem, List &list)
+    : Generator(mem), m_list(list), m_pos(0)
 {
     m_list.raise();
 }
@@ -80,7 +80,7 @@ ListIterator::~ListIterator()
     m_list.drop();
 }
 
-Value* ListIterator::next() throw(stop_iteration_exception)
+ValuePtr ListIterator::next() throw(stop_iteration_exception)
 {
     if(m_pos >= m_list.size())
         throw stop_iteration_exception();
@@ -91,9 +91,9 @@ Value* ListIterator::next() throw(stop_iteration_exception)
     return res;
 }
 
-Value* ListIterator::duplicate() const
+ValuePtr ListIterator::duplicate()
 {
-    return new ListIterator(m_list);
+    return new (memory_manager()) ListIterator(memory_manager(), m_list);
 }
 
 }

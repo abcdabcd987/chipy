@@ -10,24 +10,20 @@ class PythonTest : public testing::Test
 class FooObj : public CppObject
 {
 public:
-    Value* call_function(const std::string& funcname, const std::vector<Value*> &arguments) override
+    Value* call_function(Scope &scopeconst std::string& funcname, const std::vector<Value*> &arguments) override
     {
-        return create_integer(42);
+        return scope.create_integer(42);
     }
 };
 
 class Foo2Obj : public CppObject
 {
 public:
-    Value* call_function(const std::string& funcname, const std::vector<Value*> &args) override
-    {
-        if(args.size() == 0 || args[0]->type() != ValueType::Integer)
-        {
-            throw std::runtime_error("invalid argument(s)");
+    Value* call_function(Scope &scope
         }
 
         auto i = dynamic_cast<IntVal*>(args[0]);
-        return create_integer(2 * i->get());
+        return scope.create_integer(2 * i->get());
     }
 };
 

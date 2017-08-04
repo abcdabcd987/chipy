@@ -1,10 +1,11 @@
-#include "chipy/Value.h"
+#include "chipy/Dictionary.h"
+#include "chipy/Tuple.h"
 
 namespace chipy
 {
 
-DictItemIterator::DictItemIterator(Dictionary &dict)
-    : m_dict(dict), m_it(dict.elements().begin())
+DictItemIterator::DictItemIterator(MemoryManager &mem, Dictionary &dict)
+    : Generator(mem), m_dict(dict), m_it(dict.elements().begin())
 {
     m_dict.raise();
 }
@@ -14,27 +15,25 @@ DictItemIterator::~DictItemIterator()
     m_dict.drop();
 }
 
-Value* DictItemIterator::next() throw(stop_iteration_exception)
+ValuePtr DictItemIterator::next() throw(stop_iteration_exception)
 {
     if(m_it == m_dict.elements().end())
         throw stop_iteration_exception();
 
-    auto key = create_string(m_it->first);
-    auto t = create_tuple(key, m_it->second);
+    auto key = new (memory_manager()) StringVal(memory_manager(), m_it->first);
+    auto t = new (memory_manager()) Tuple(memory_manager(), key, m_it->second);
     m_it++;
     key->drop();
     return t;
 }
 
-Value* DictItemIterator::duplicate() const
+Value* DictItemIterator::duplicate()
 {
-    return new DictItemIterator(m_dict);
+    return new (memory_manager()) DictItemIterator(memory_manager(), m_dict);
 }
 
-
-
-DictKeyIterator::DictKeyIterator(Dictionary &dict)
-    : m_dict(dict), m_it(dict.elements().begin())
+DictKeyIterator::DictKeyIterator(MemoryManager &mem, Dictionary &dict)
+    : Generator(mem), m_dict(dict), m_it(dict.elements().begin())
 {
     m_dict.raise();
 }
@@ -46,10 +45,10 @@ DictKeyIterator::~DictKeyIterator()
 
 DictItems* Dictionary::items()
 {
-    return new DictItems(*this);
+    return new (memory_manager()) DictItems(memory_manager(), *this);
 }
 
-Value* DictKeyIterator::next() throw(stop_iteration_exception)
+ValuePtr DictKeyIterator::next() throw(stop_iteration_exception)
 {
     if(m_it == m_dict.elements().end())
         throw stop_iteration_exception();
@@ -60,13 +59,10 @@ Value* DictKeyIterator::next() throw(stop_iteration_exception)
     return elem;
 }
 
-Value* DictKeyIterator::duplicate() const
+ValuePtr DictKeyIterator::duplicate()
 {
-    return new DictKeyIterator(m_dict);
+    return new (memory_manager()) DictKeyIterator(memory_manager(), m_dict);
 }
-
-Dictionary::Dictionary()
-{}
 
 Dictionary::~Dictionary()
 {
@@ -74,22 +70,22 @@ Dictionary::~Dictionary()
         it.second->drop();
 }
 
-Value* DictItems::duplicate() const
+ValuePtr DictItems::duplicate()
 {
-    return new DictItems(m_dict);
+    return new (memory_manager()) DictItems(memory_manager(), m_dict);
 }
 
-Iterator* DictItems::iterate()
+IteratorPtr DictItems::iterate()
 {
-    return new DictItemIterator(m_dict);
+    return new (memory_manager()) DictItemIterator(memory_manager(), m_dict);
 }
 
-const std::map<std::string, Value*>& Dictionary::elements() const
+const std::map<std::string, ValuePtr>& Dictionary::elements() const
 {
     return m_elements;
 }
 
-std::map<std::string, Value*>& Dictionary::elements()
+std::map<std::string, ValuePtr>& Dictionary::elements()
 {
     return m_elements;
 }
@@ -99,12 +95,12 @@ uint32_t Dictionary::size() const
     return m_elements.size();
 }
 
-Iterator* Dictionary::iterate()
+IteratorPtr Dictionary::iterate()
 {
-    return new DictKeyIterator(*this);
+    return new (memory_manager()) DictKeyIterator(memory_manager(), *this);
 }
 
-Value* Dictionary::get(const std::string &key)
+ValuePtr Dictionary::get(const std::string &key)
 {
     auto it = m_elements.find(key);
     if(it == m_elements.end())
@@ -114,7 +110,7 @@ Value* Dictionary::get(const std::string &key)
     return it->second;
 }
 
-void Dictionary::insert(const std::string &key, Value *value)
+void Dictionary::insert(const std::string &key, ValuePtr value)
 {
     auto it = m_elements.find(key);
     if(it != m_elements.end())
@@ -129,9 +125,9 @@ ValueType Dictionary::type() const
     return ValueType::Dictionary;
 }
 
-Value* Dictionary::duplicate() const
+ValuePtr Dictionary::duplicate()
 {
-    auto d = new Dictionary();
+    auto d = new (memory_manager()) Dictionary(memory_manager());
 
     for(auto &it: m_elements)
     {

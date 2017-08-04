@@ -1,9 +1,11 @@
 #include <memory>
 #include <map>
-
-#include "chipy/Interpreter.h"
 #include <glog/logging.h>
 
+#include "chipy/Interpreter.h"
+#include "chipy/Callable.h"
+#include "chipy/Scope.h"
+#include "RangeIterator.h"
 #include "modules/modules.h"
 
 namespace chipy
@@ -57,389 +59,47 @@ enum class UnaryOpType
     Sub,
 };
 
-class CppAttribute : public Callable
+
+Module* Interpreter::get_module(const std::string &name)
 {
-public:
-    CppAttribute(CppObject &obj, const std::string& name)
-        : m_obj(obj), m_name(name)
+    auto it = m_loaded_modules.find(name);
+
+    if(it != m_loaded_modules.end())
     {
+        return it->second;
     }
 
-    ValueType type() const override
+    Module *module = nullptr;
+
+    if(name == "rand")
     {
-        return ValueType::Attribute;
+        module = new (m_mem) RandModule(m_mem);
     }
-
-    Value* call(const std::vector<Value*>& args) override
-    {
-        return m_obj.call_function(m_name, args);
-    }
-
-    Value* duplicate() const
-    {
-        return new CppAttribute(m_obj, m_name);
-    }
-
-private:
-    CppObject &m_obj;
-    const std::string m_name;
-};
-
-enum class BuiltinType
-{
-    Range,
-    MakeInt,
-    MakeString,
-    Print
-};
-
-class RangeIterator : public Generator
-{
-public:
-    RangeIterator(int32_t start, int32_t end, int32_t step_size)
-        : m_start(start), m_end(end), m_step_size(step_size)
-    {
-        m_pos = m_start;
-    }
-
-    Value* duplicate() const override
-    {
-        return new RangeIterator(m_start, m_end, m_step_size);
-    }
-
-    Value* next() throw(stop_iteration_exception) override
-    {
-        if(m_pos >= m_end)
-            throw stop_iteration_exception();
-
-        auto res = new IntVal(m_pos);
-        m_pos += m_step_size;
-
-        return res;
-    }
-
-private:
-    int32_t m_pos;
-    const int32_t m_start, m_end, m_step_size;
-};
-
-class Builtin : public Callable
-{
-public:
-    Builtin(BuiltinType type)
-        : m_type(type)
-    {}
-
-    Value* duplicate() const
-    {
-        return new Builtin(m_type);
-    }
-
-    ValueType type() const
-    {
-        return ValueType::Builtin;
-    }
-
-    Value* call(const std::vector<Value*> &args)
-    {
-        if(m_type == BuiltinType::Range)
-        {
-            //TODO implemeent the rest...
-            if(args.size() != 1)
-                throw std::runtime_error("Invalid number of arguments");
-
-            auto arg = args[0];
-
-            if(arg == nullptr || arg->type() != ValueType::Integer)
-                throw std::runtime_error("invalid argument type");
-
-            return new RangeIterator(0, dynamic_cast<const IntVal*>(arg)->get(), 1);
-        }
-        else if(m_type == BuiltinType::MakeString)
-        {
-            if(args.size() != 1)
-                throw std::runtime_error("Invalid number of arguments");
-
-            auto arg = args[0];
-            if(arg->type() == ValueType::String)
-                return arg;
-            else if(arg->type() == ValueType::Integer)
-            {
-                auto i = dynamic_cast<const IntVal*>(arg)->get();
-                arg->drop();
-
-                return create_string(std::to_string(i));
-            }
-            else
-                throw std::runtime_error("Can't conver to integer");
-        }
-
-        else if(m_type == BuiltinType::MakeInt)
-        {
-            if(args.size() != 1)
-                throw std::runtime_error("Invalid number of arguments");
-
-            auto arg = args[0];
-            if(arg->type() == ValueType::Integer)
-                return arg;
-            else if(arg->type() == ValueType::String)
-            {
-                std::string s = dynamic_cast<StringVal*>(arg)->get();
-                arg->drop();
-
-                char *endptr = nullptr;
-                return create_integer(strtol(s.c_str(), &endptr, 10));
-            }
-            else
-                throw std::runtime_error("Can't conver to integer");
-        }
-        else if(m_type == BuiltinType::Print)
-        {
-            if(args.size() != 1)
-                throw std::runtime_error("Invalid number of arguments");
-
-            auto arg = args[0];
-
-            if(arg->type() != ValueType::String)
-                throw std::runtime_error("Argument not a string");
-
-#ifdef IS_ENCLAVE
-            log_info("Program says: " + dynamic_cast<StringVal*>(arg)->get());
-#else
-            LOG(INFO) << "Program says: " << dynamic_cast<StringVal*>(arg)->get();
-#endif
-        }
-        else
-            throw std::runtime_error("Unknown builtin type");
-
+    else
         return nullptr;
-    }
 
-private:
-    const BuiltinType m_type;
-};
-
-class CppObjectValue : public Iterator
-{
-public:
-    CppObjectValue(CppObject *obj, bool owns_object)
-        : m_obj(obj), m_owns_object(owns_object)
-    {}
-
-    virtual ~CppObjectValue()
-    {
-        if(m_owns_object)
-            delete m_obj;
-    }
-
-    bool is_generator() const override
-    {
-        return true; // TODO actually check
-    }
-
-    Value* next() throw(stop_iteration_exception) override
-    {
-        return m_obj->call_function("__next__", {});
-    }
-
-    CppAttribute* get_attribute(const std::string &name)
-    {
-        return new CppAttribute(*m_obj, name);
-    }
-
-    Value* duplicate() const
-    {
-        if(m_owns_object)
-            throw std::runtime_error("Can't duplicate cpp object");
-
-        return new CppObjectValue(m_obj, false);
-    }
-
-    ValueType type() const override
-    {
-        return ValueType::CppObject;
-    }
-
-private:
-    CppObject *m_obj;
-    bool m_owns_object;
-};
-
-Value* create_tuple(Value *first, Value *second)
-{
-    return new Tuple(first, second);
+    m_loaded_modules.emplace(name, module);
+    return module;
 }
-
-Value* create_string(const std::string &str)
-{
-    return new StringVal(str);
-}
-
-Value* create_integer(const int32_t value)
-{
-    return new IntVal(value);
-}
-
-Value* create_boolean(const bool value)
-{
-    return new BoolVal(value);
-}
-
-Value* create_float(const double& value)
-{
-    return new FloatVal(value);
-}
-
-Value* create_none()
-{
-    return nullptr;
-}
-
-Value* wrap_cpp_object(CppObject *obj)
-{
-    return new CppObjectValue(obj, true);
-}
-
-Value* create_list(const std::vector<std::string> &list)
-{
-    auto val = new List();
-
-    for(auto &e: list)
-    {
-        auto s = create_string(e);
-        val->append(s);
-        s->drop();
-    }
-
-    return val;
-}
-
-class Scope
-{
-public:
-    const std::string BUILTIN_STR_NONE = "None";
-    const std::string BUILTIN_STR_RANGE = "range";
-    const std::string BUILTIN_STR_MAKE_INT = "int";
-    const std::string BUILTIN_STR_MAKE_STR = "str";
-    const std::string BUILTIN_STR_PRINT = "print";
-
-    Scope() : m_parent(nullptr) {}
-    Scope(Scope &parent) : m_parent(&parent) {}
-
-    ~Scope()
-    {
-        for(auto it: m_values)
-        {
-            auto val = it.second;
-
-            if(!val)
-                continue;
-
-            val->drop();
-        }
-    }
-
-    void set_value(const std::string &id, Value* value)
-    {
-        if(m_parent && m_parent->has_value(id))
-        {
-            m_parent->set_value(id, value);
-            return;
-        }
-
-        // FIXME actually update references...
-        auto it = m_values.find(id);
-        if(it != m_values.end())
-        {
-            if(it->second)
-                it->second->drop();
-            m_values.erase(it);
-        }
-
-        m_values[id] = value;
-
-        if(value)
-            value->raise();
-    }
-
-    bool has_value(const std::string &id)
-    {
-        if(m_parent && m_parent->has_value(id))
-            return true;
-
-        return m_values.find(id) != m_values.end();
-    }
-
-    Value* get_value(const std::string &id)
-    {
-        if(id == BUILTIN_STR_NONE)
-            return nullptr;
-        else if(id == BUILTIN_STR_RANGE)
-            return new Builtin(BuiltinType::Range);
-        else if(id == BUILTIN_STR_MAKE_INT)
-            return new Builtin(BuiltinType::MakeInt);
-        else if(id == BUILTIN_STR_MAKE_STR)
-            return new Builtin(BuiltinType::MakeString);
-        else if(id == BUILTIN_STR_PRINT)
-            return new Builtin(BuiltinType::Print);
-
-        auto it = m_values.find(id);
-        if(it == m_values.end())
-        {
-            if(m_parent)
-                return m_parent->get_value(id);
-            else
-                throw std::runtime_error("No such value: " + id);
-        }
-
-        auto val = it->second;
-        if(val)
-            val->raise();
-        return val;
-    }
-
-    void terminate()
-    {
-        m_terminated = true;
-    }
-
-    bool is_terminated() const
-    {
-        return m_terminated;
-    }
-
-private:
-    Scope *m_parent;
-    bool m_terminated = false;
-    std::map<std::string, Value*> m_values;
-};
 
 void Interpreter::load_from_module(Scope &scope, const std::string &mname, const std::string &name, const std::string &as_name)
 {
-    Module *module = nullptr;
-
-    if(mname == "rand")
-    {
-        module = &g_module_rand;
-    }
-    else
+    auto module = get_module(mname);
+        
+    if(!module)
         throw std::runtime_error("Unknown module: " + mname);
 
     scope.set_value(as_name == "" ? name: as_name, module->get_member(name));
 }
 
-void Interpreter::load_module(Scope &scope, const std::string &name, const std::string &as_name)
+void Interpreter::load_module(Scope &scope, const std::string &mname, const std::string &as_name)
 {
-    Value *module = nullptr;
+    auto module = get_module(mname);
+        
+    if(!module)
+        throw std::runtime_error("Unknown module: " + mname);
 
-    if(name == "rand")
-    {
-        module = &g_module_rand;
-    }
-    else
-        throw std::runtime_error("Unknown module: " + name);
-
-    scope.set_value(as_name == "" ? name: as_name, module);
+    scope.set_value(as_name == "" ? mname: as_name, module);
 }
 
 bool Interpreter::execute()
@@ -546,7 +206,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
     {
         std::string name, as_name;
         m_data >> name >> as_name;
-        returnval = new Alias(name, as_name);
+        returnval = new (m_mem) Alias(m_mem, name, as_name);
         break;
     }
     case NodeType::Attribute:
@@ -554,11 +214,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         Value *value = execute_next(scope, dummy_loop_state);
         std::string name = read_name();
 
-        if(value->type() == ValueType::CppObject)
-        {
-            returnval = dynamic_cast<CppObjectValue*>(value)->get_attribute(name);
-        }
-        else if(value->type() == ValueType::Module)
+        if(value->type() == ValueType::Module)
         {
             returnval = dynamic_cast<Module*>(value)->get_member(name);
         }
@@ -577,9 +233,9 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         m_data >> str;
 
         if(str == "False")
-            returnval = new BoolVal(false);
+            returnval = scope.create_boolean(false);
         else if(str == "True")
-            returnval = new BoolVal(true);
+            returnval = scope.create_boolean(true);
         else
             returnval = scope.get_value(str);
         break;
@@ -676,7 +332,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             switch(type)
             {
             case UnaryOpType::Not:
-                returnval = new BoolVal(!cond);
+                returnval = scope.create_boolean(!cond);
                 break;
             default:
                 throw std::runtime_error("Unknown unary operation");
@@ -690,10 +346,10 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             switch(type)
             {
             case UnaryOpType::Sub:
-                returnval = new IntVal((-1)*i);
+                returnval = scope.create_integer((-1)*i);
                 break;
             case UnaryOpType::Not:
-                returnval = new BoolVal(false);
+                returnval = scope.create_boolean(false);
                 break;
             default:
                 throw std::runtime_error("Unknown unary operation");
@@ -704,7 +360,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             switch(type)
             {
             case UnaryOpType::Not:
-                returnval = new BoolVal(res == nullptr);
+                returnval = scope.create_boolean(res == nullptr);
 
                 if(res)
                     res->drop();
@@ -783,7 +439,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         else
             throw std::runtime_error("unknown bool op type");
 
-        returnval = new BoolVal(res);
+        returnval = scope.create_boolean(res);
         break;
     }
     case NodeType::BinaryOp:
@@ -803,14 +459,14 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 auto i1 = dynamic_cast<const IntVal*>(left)->get();
                 auto i2 = dynamic_cast<const IntVal*>(right)->get();
 
-                returnval = new IntVal(i1 + i2);
+                returnval = scope.create_integer(i1 + i2);
             }
             else if(left->type() == ValueType::String && right->type() == ValueType::String)
             {
                 auto s1 = dynamic_cast<const StringVal*>(left)->get();
                 auto s2 = dynamic_cast<const StringVal*>(right)->get();
 
-                returnval = new StringVal(s1 + s2);
+                returnval = scope.create_string(s1 + s2);
             }
             else
                 throw std::runtime_error("failed to add");
@@ -828,7 +484,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 auto i1 = dynamic_cast<IntVal*>(left)->get();
                 auto i2 = dynamic_cast<IntVal*>(right)->get();
 
-                returnval = new IntVal(i1 - i2);
+                returnval = scope.create_integer(i1 - i2);
             }
             else
                 throw std::runtime_error("failed to sub");
@@ -850,7 +506,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
     }
     case NodeType::List:
     {
-        auto list = new List();
+        auto list = scope.create_list();
 
         uint32_t size = 0;
         m_data >> size;
@@ -870,7 +526,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         std::string str;
         m_data >> str;
 
-        returnval = new StringVal(str);
+        returnval = scope.create_string(str);
         break;
     }
     case NodeType::Compare:
@@ -931,7 +587,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
 
             rval->drop();
             current->drop();
-            current = new BoolVal(res);
+            current = scope.create_boolean(res);
         }
 
         returnval = current;
@@ -946,11 +602,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
     {
         int32_t val;
         m_data >> val;
-        returnval = new IntVal(val);
-        break;
-    }
-    case NodeType::Call:
-    {
+        returnval = scope.create_integer(val);
         auto callable = execute_next(scope, dummy_loop_state);
         if(!callable->is_callable())
             throw std::runtime_error("Cannot call un-callable!");
@@ -958,7 +610,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         uint32_t num_args = 0;
         m_data >> num_args;
 
-        std::vector<Value*> args;
+        std::vector<ValuePtr> args;
         for(uint32_t i = 0; i < num_args; ++i)
         {
             auto arg = execute_next(scope, dummy_loop_state);
@@ -1015,7 +667,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
     }
     case NodeType::Dictionary:
     {
-        auto res = new Dictionary();
+        auto res = scope.create_dictionary();
 
         uint32_t size;
         m_data >> size;
@@ -1076,7 +728,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 break;
             }
 
-            Scope body_scope(scope);
+            Scope body_scope(m_mem, scope);
             execute_next(body_scope, for_loop_state);
         }
         break;
@@ -1102,7 +754,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
 
         while(for_loop_state != LoopState::Break)
         {
-            Scope body_scope(scope);
+            Scope body_scope(m_mem, scope);
             Value *next = nullptr;
 
             try {
@@ -1329,30 +981,32 @@ void Interpreter::skip_next()
     }
 }
 
-void Interpreter::set_object(const std::string &name, CppObject &obj)
-{
-    auto val = new CppObjectValue(&obj, false);
-    m_global_scope->set_value(name, val);
-    val->drop();
-}
-
 void Interpreter::set_string(const std::string &name, const std::string &value)
 {
-    auto s = create_string(value);
+    auto s = m_global_scope->create_string(value);
     m_global_scope->set_value(name, s);
     s->drop();
 }
 
 void Interpreter::set_list(const std::string &name, const std::vector<std::string> &list)
 {
-    auto l = create_list(list);
+    auto l = m_global_scope->create_list();
+    
+    for(auto &e: list)
+    {
+        //FIXME support other types
+        auto s = m_global_scope->create_string(e);
+        l->append(s);
+        s->drop();
+    }
+
     m_global_scope->set_value(name, l);
     l->drop();
 }
 
 Interpreter::Interpreter(const BitStream &data)
 {
-    m_global_scope = new Scope();
+    m_global_scope = new (m_mem) Scope(m_mem);
     m_data.assign(data.data(), data.size(), true);
 }
 

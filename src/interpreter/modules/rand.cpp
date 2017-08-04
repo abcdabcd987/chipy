@@ -3,10 +3,14 @@
 namespace chipy
 {
 
-Value* RandModule::get_member(const std::string &name) const
+ValuePtr RandModule::get_member(const std::string &name)
 {
     if(name == "randint")
-        return new Function([](const std::vector<Value*> &args) -> Value*{
+    {
+        auto &mem = memory_manager();
+
+        return new (mem) Function(mem,
+              [&](const std::vector<Value*> &args) -> Value* {
                 if(args.size() != 2)
                     throw std::runtime_error("Invalid number of arguments");
 
@@ -15,12 +19,11 @@ Value* RandModule::get_member(const std::string &name) const
 
                 auto range = end->get() - start->get();
                 
-                return create_integer((rand() % range) + start->get());
+                return new (memory_manager()) IntVal(mem, (rand() % range) + start->get());
              });
+    }
     else
         throw std::runtime_error("No such member: " + name);
 }
-
-RandModule g_module_rand;
 
 }
