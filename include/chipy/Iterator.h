@@ -17,7 +17,7 @@ public:
         return false;
     }
 
-    virtual Value* next() throw(stop_iteration_exception) = 0;
+    virtual ValuePtr next() throw(stop_iteration_exception) = 0;
 
     ValueType type() const override
     {
@@ -28,7 +28,7 @@ protected:
     using Value::Value;
 };
 
-typedef Iterator* IteratorPtr;
+typedef std::shared_ptr<Iterator> IteratorPtr;
 
 class Generator : public Iterator
 {
@@ -54,7 +54,7 @@ public:
 
     virtual uint32_t size() const = 0;
 
-    virtual Iterator* iterate() = 0;
+    virtual IteratorPtr iterate() = 0;
 
 protected:
     using Value::Value;

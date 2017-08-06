@@ -1,11 +1,15 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include "chipy/Value.h"
 #include "chipy/Callable.h"
 
 namespace chipy
 {
+
+class Module;
+typedef std::shared_ptr<Module> ModulePtr;
     
 class Module : public Value
 {
@@ -35,10 +39,10 @@ public:
 
     ValuePtr duplicate() override
     {
-        return new (memory_manager()) Function(memory_manager(), m_func);
+        return wrap_value(new (memory_manager()) Function(memory_manager(), m_func));
     }
 
-    ValuePtr call(const std::vector<Value*>& args) override
+    ValuePtr call(const std::vector<ValuePtr>& args) override
     {
         return m_func(args);
     }
@@ -48,7 +52,5 @@ public:
 private:
     const std::function<ValuePtr (const std::vector<ValuePtr>)> m_func;
 };
-
-typedef Module* ModulePtr;
 
 }

@@ -17,7 +17,7 @@ public:
 
     ValuePtr duplicate() override
     {
-        return new (memory_manager()) RangeIterator(memory_manager(), m_start, m_end, m_step_size);
+        return wrap_value(new (memory_manager()) RangeIterator(memory_manager(), m_start, m_end, m_step_size));
     }
 
     ValuePtr next() throw(stop_iteration_exception) override
@@ -25,7 +25,7 @@ public:
         if(m_pos >= m_end)
             throw stop_iteration_exception();
 
-        auto res = new (memory_manager()) IntVal(memory_manager(), m_pos);
+        auto res = wrap_value(new (memory_manager()) IntVal(memory_manager(), m_pos));
         m_pos += m_step_size;
 
         return res;

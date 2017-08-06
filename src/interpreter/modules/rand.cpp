@@ -9,8 +9,8 @@ ValuePtr RandModule::get_member(const std::string &name)
     {
         auto &mem = memory_manager();
 
-        return new (mem) Function(mem,
-              [&](const std::vector<Value*> &args) -> Value* {
+        return wrap_value( new (mem) Function(mem,
+              [&](const std::vector<ValuePtr> &args) -> ValuePtr {
                 if(args.size() != 2)
                     throw std::runtime_error("Invalid number of arguments");
 
@@ -19,8 +19,8 @@ ValuePtr RandModule::get_member(const std::string &name)
 
                 auto range = end->get() - start->get();
                 
-                return new (memory_manager()) IntVal(mem, (rand() % range) + start->get());
-             });
+                return wrap_value(new (memory_manager()) IntVal(mem, (rand() % range) + start->get()));
+             }));
     }
     else
         throw std::runtime_error("No such member: " + name);

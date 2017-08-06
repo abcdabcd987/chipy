@@ -7,12 +7,6 @@ namespace chipy
 DictItemIterator::DictItemIterator(MemoryManager &mem, Dictionary &dict)
     : Generator(mem), m_dict(dict), m_it(dict.elements().begin())
 {
-    m_dict.raise();
-}
-
-DictItemIterator::~DictItemIterator()
-{
-    m_dict.drop();
 }
 
 ValuePtr DictItemIterator::next() throw(stop_iteration_exception)
@@ -20,32 +14,25 @@ ValuePtr DictItemIterator::next() throw(stop_iteration_exception)
     if(m_it == m_dict.elements().end())
         throw stop_iteration_exception();
 
-    auto key = new (memory_manager()) StringVal(memory_manager(), m_it->first);
-    auto t = new (memory_manager()) Tuple(memory_manager(), key, m_it->second);
+    auto key = wrap_value(new (memory_manager()) StringVal(memory_manager(), m_it->first));
+    auto t = wrap_value(new (memory_manager()) Tuple(memory_manager(), key, m_it->second));
     m_it++;
-    key->drop();
     return t;
 }
 
-Value* DictItemIterator::duplicate()
+ValuePtr DictItemIterator::duplicate()
 {
-    return new (memory_manager()) DictItemIterator(memory_manager(), m_dict);
+    return wrap_value(new (memory_manager()) DictItemIterator(memory_manager(), m_dict));
 }
 
 DictKeyIterator::DictKeyIterator(MemoryManager &mem, Dictionary &dict)
     : Generator(mem), m_dict(dict), m_it(dict.elements().begin())
 {
-    m_dict.raise();
 }
 
-DictKeyIterator::~DictKeyIterator()
+DictItemsPtr Dictionary::items()
 {
-    m_dict.drop();
-}
-
-DictItems* Dictionary::items()
-{
-    return new (memory_manager()) DictItems(memory_manager(), *this);
+    return wrap_value(new (memory_manager()) DictItems(memory_manager(), *this));
 }
 
 ValuePtr DictKeyIterator::next() throw(stop_iteration_exception)
@@ -61,23 +48,17 @@ ValuePtr DictKeyIterator::next() throw(stop_iteration_exception)
 
 ValuePtr DictKeyIterator::duplicate()
 {
-    return new (memory_manager()) DictKeyIterator(memory_manager(), m_dict);
-}
-
-Dictionary::~Dictionary()
-{
-    for(auto &it : m_elements)
-        it.second->drop();
+    return wrap_value(new (memory_manager()) DictKeyIterator(memory_manager(), m_dict));
 }
 
 ValuePtr DictItems::duplicate()
 {
-    return new (memory_manager()) DictItems(memory_manager(), m_dict);
+    return wrap_value(new (memory_manager()) DictItems(memory_manager(), m_dict));
 }
 
 IteratorPtr DictItems::iterate()
 {
-    return new (memory_manager()) DictItemIterator(memory_manager(), m_dict);
+    return wrap_value(new (memory_manager()) DictItemIterator(memory_manager(), m_dict));
 }
 
 const std::map<std::string, ValuePtr>& Dictionary::elements() const
@@ -97,7 +78,7 @@ uint32_t Dictionary::size() const
 
 IteratorPtr Dictionary::iterate()
 {
-    return new (memory_manager()) DictKeyIterator(memory_manager(), *this);
+    return wrap_value(new (memory_manager()) DictKeyIterator(memory_manager(), *this));
 }
 
 ValuePtr Dictionary::get(const std::string &key)
@@ -106,18 +87,12 @@ ValuePtr Dictionary::get(const std::string &key)
     if(it == m_elements.end())
         return nullptr;
 
-    it->second->raise();
     return it->second;
 }
 
 void Dictionary::insert(const std::string &key, ValuePtr value)
 {
-    auto it = m_elements.find(key);
-    if(it != m_elements.end())
-        it->second->drop();
-
     m_elements[key] = value;
-    value->raise();
 }
 
 ValueType Dictionary::type() const
@@ -127,11 +102,10 @@ ValueType Dictionary::type() const
 
 ValuePtr Dictionary::duplicate()
 {
-    auto d = new (memory_manager()) Dictionary(memory_manager());
+    auto d = wrap_value(new (memory_manager()) Dictionary(memory_manager()));
 
     for(auto &it: m_elements)
     {
-        it.second->raise();
         d->insert(it.first, it.second);
     }
 

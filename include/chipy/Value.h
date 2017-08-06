@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <stdint.h>
 #include <string>
 #include "json/json.h"
@@ -28,7 +29,13 @@ enum class ValueType
 };
 
 class Value;
-typedef Value* ValuePtr;
+typedef std::shared_ptr<Value> ValuePtr;
+
+template<typename T>
+std::shared_ptr<T> wrap_value(T *val)
+{
+    return std::shared_ptr<T>{val};
+}
 
 class Value : public Object
 {
@@ -36,11 +43,6 @@ public:
     virtual ValueType type() const = 0;
 
     virtual ValuePtr duplicate() = 0;
-
-    void raise()
-    {
-        m_reference_count += 1;
-    }
 
     virtual bool is_generator() const
     {
@@ -62,22 +64,11 @@ public:
         return true;
     }
 
-    void drop()
-    {
-        m_reference_count -= 1;
-
-        if(m_reference_count == 0)
-            delete this;
-    }
-
     virtual ~Value() {}
 
 protected:
     Value(MemoryManager &mem) : Object(mem)
         {}
-
-private:
-    uint16_t m_reference_count = 1;
 };
 
 
@@ -124,7 +115,7 @@ public:
 
     ValuePtr duplicate() override
     {
-        return new (memory_manager()) Alias(memory_manager(), name(), as_name());
+        return wrap_value(new (memory_manager()) Alias(memory_manager(), name(), as_name()));
     }
 
     const std::string name() const { return m_name; }
@@ -140,8 +131,8 @@ public:
     BoolVal(MemoryManager &mem, bool val)
         : PlainValue(mem, val) {}
 
-    Value* duplicate() override
-    { return new (memory_manager()) BoolVal(memory_manager(), m_value); }
+    ValuePtr duplicate() override
+    { return wrap_value(new (memory_manager()) BoolVal(memory_manager(), m_value)); }
 
     bool bool_test() const override { return m_value; }
 };
@@ -153,7 +144,7 @@ public:
         : PlainValue(mem, val) {}
 
     ValuePtr duplicate() override
-    { return new (memory_manager()) StringVal(memory_manager(), m_value); }
+    { return wrap_value(new (memory_manager()) StringVal(memory_manager(), m_value)); }
 };
 
 class FloatVal : public PlainValue<double, ValueType::Float>
@@ -163,7 +154,7 @@ public:
         : PlainValue(mem, val) {}
 
     ValuePtr duplicate() override
-    { return new (memory_manager()) FloatVal(memory_manager(), m_value); }
+    { return wrap_value(new (memory_manager()) FloatVal(memory_manager(), m_value)); }
 };
 
 class IntVal : public PlainValue<int32_t, ValueType::Integer>
@@ -173,18 +164,24 @@ public:
         : PlainValue(mem, val) {}
 
     ValuePtr duplicate() override
-    { return new (memory_manager()) IntVal(memory_manager(), m_value); }
+    { return wrap_value(new (memory_manager()) IntVal(memory_manager(), m_value)); }
 
     bool bool_test() const override
     { return m_value != 0; }
 };
 
+typedef std::shared_ptr<IntVal> IntValPtr;
+typedef std::shared_ptr<StringVal> StringValPtr;
+typedef std::shared_ptr<FloatVal> FloatValPtr;
+typedef std::shared_ptr<BoolVal> BoolValPtr;
+
 class value_exception {};
 
+
 template<typename T>
-T* value_cast(Value *val)
+std::shared_ptr<T> value_cast(ValuePtr val)
 {
-    auto res = dynamic_cast<T*>(val);
+    auto res = std::dynamic_pointer_cast<T>(val);
     if(res == nullptr)
         throw value_exception();
 

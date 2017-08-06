@@ -60,7 +60,7 @@ enum class UnaryOpType
 };
 
 
-Module* Interpreter::get_module(const std::string &name)
+ModulePtr Interpreter::get_module(const std::string &name)
 {
     auto it = m_loaded_modules.find(name);
 
@@ -69,11 +69,11 @@ Module* Interpreter::get_module(const std::string &name)
         return it->second;
     }
 
-    Module *module = nullptr;
+    std::shared_ptr<Module> module = nullptr;
 
     if(name == "rand")
     {
-        module = new (m_mem) RandModule(m_mem);
+        module = wrap_value<Module>(new (m_mem) RandModule(m_mem));
     }
     else
         return nullptr;
@@ -105,14 +105,12 @@ void Interpreter::load_module(Scope &scope, const std::string &mname, const std:
 bool Interpreter::execute()
 {
     LoopState loop_state = LoopState::None;
-    Value *val = execute_next(*m_global_scope, loop_state);
+    ValuePtr val = execute_next(*m_global_scope, loop_state);
 
     if(!val || val->type() != ValueType::Bool)
         throw std::runtime_error("result is not a boolean");
 
-    bool res = dynamic_cast<BoolVal*>(val)->get();
-    val->drop();
-    return res;
+    return value_cast<BoolVal>(val)->get();
 }
 
 std::vector<std::string> Interpreter::read_names()
@@ -172,10 +170,10 @@ std::string Interpreter::read_name()
         throw std::runtime_error("Not a valid name");
 }
 
-Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
+ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
 {
     auto start = m_data.pos();
-    Value *returnval = nullptr;
+    ValuePtr returnval = nullptr;
 
     NodeType type;
     m_data >> type;
@@ -191,7 +189,6 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         auto val = execute_next(scope, dummy_loop_state);
         auto alias = value_cast<Alias>(val);
         load_from_module(scope, module, alias->name(), alias->as_name());
-        alias->drop();
         break;
     }
     case NodeType::Import:
@@ -199,28 +196,27 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         auto val = execute_next(scope, dummy_loop_state);
         auto alias = value_cast<Alias>(val);
         load_module(scope, alias->name(), alias->as_name());
-        alias->drop();
         break;
     }
     case NodeType::Alias:
     {
         std::string name, as_name;
         m_data >> name >> as_name;
-        returnval = new (m_mem) Alias(m_mem, name, as_name);
+        returnval = wrap_value(new (m_mem) Alias(m_mem, name, as_name));
         break;
     }
     case NodeType::Attribute:
     {
-        Value *value = execute_next(scope, dummy_loop_state);
+        ValuePtr value = execute_next(scope, dummy_loop_state);
         std::string name = read_name();
 
         if(value->type() == ValueType::Module)
         {
-            returnval = dynamic_cast<Module*>(value)->get_member(name);
+            returnval = value_cast<Module>(value)->get_member(name);
         }
         else if(value->type() == ValueType::Dictionary && name == "items")
         {
-            returnval = dynamic_cast<Dictionary*>(value)->items();
+            returnval = value_cast<Dictionary>(value)->items();
         }
         else
             throw std::runtime_error("Cannot get attribute");
@@ -274,7 +270,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 if(val->type() != ValueType::Tuple)
                     throw std::runtime_error("cannot unpack value");
 
-                auto t = dynamic_cast<Tuple*>(val);
+                auto t = value_cast<Tuple>(val);
 
                 scope.set_value(names[0], t->first());
                 scope.set_value(names[1], t->second());
@@ -283,8 +279,6 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 throw std::runtime_error("invalid number of names");
         }
 
-        if(val)
-            val->drop();
         break;
     }
     case NodeType::StatementList:
@@ -292,7 +286,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         uint32_t size = 0;
         m_data >> size;
 
-        Value *final = nullptr;
+        ValuePtr final = nullptr;
 
         for(uint32_t i = 0; i < size; ++i)
         {
@@ -300,9 +294,6 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 skip_next();
             else
             {
-                if(final)
-                    final->drop();
-
                 LoopState child_loop_state = loop_state;
                 if(child_loop_state == LoopState::TopLevel)
                     child_loop_state = LoopState::Normal;
@@ -326,8 +317,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
 
         if(res && res->type() == ValueType::Bool)
         {
-            bool cond = dynamic_cast<BoolVal*>(res)->get();
-            res->drop();
+            bool cond = value_cast<BoolVal>(res)->get();
 
             switch(type)
             {
@@ -340,8 +330,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         }
         else if(res && res->type() == ValueType::Integer)
         {
-            int32_t i = dynamic_cast<const IntVal*>(res)->get();
-            res->drop();
+            int32_t i = value_cast<IntVal>(res)->get();
 
             switch(type)
             {
@@ -361,9 +350,6 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             {
             case UnaryOpType::Not:
                 returnval = scope.create_boolean(res == nullptr);
-
-                if(res)
-                    res->drop();
                 break;
             default:
                 throw std::runtime_error("Unknonw unary op");
@@ -403,10 +389,8 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 if(val->type() != ValueType::Bool)
                     throw std::runtime_error("not a valid bool operation");
 
-                if(!dynamic_cast<const BoolVal*>(val)->get())
+                if(!value_cast<BoolVal>(val)->get())
                     res = false;
-
-                val->drop();
             }
 
         }
@@ -430,10 +414,9 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                  if(val->type() != ValueType::Bool)
                      throw std::runtime_error("not a valid bool operation");
 
-                 if(dynamic_cast<const BoolVal*>(val)->get())
+                 //FIXME use bool testable
+                 if(value_cast<BoolVal>(val)->get())
                      res = true;
-
-                 val->drop();
              }
         }
         else
@@ -456,15 +439,15 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         {
             if(left->type() == ValueType::Integer && right->type() == ValueType::Integer)
             {
-                auto i1 = dynamic_cast<const IntVal*>(left)->get();
-                auto i2 = dynamic_cast<const IntVal*>(right)->get();
+                auto i1 = value_cast<IntVal>(left)->get();
+                auto i2 = value_cast<IntVal>(right)->get();
 
                 returnval = scope.create_integer(i1 + i2);
             }
             else if(left->type() == ValueType::String && right->type() == ValueType::String)
             {
-                auto s1 = dynamic_cast<const StringVal*>(left)->get();
-                auto s2 = dynamic_cast<const StringVal*>(right)->get();
+                auto s1 = value_cast<StringVal>(left)->get();
+                auto s2 = value_cast<StringVal>(right)->get();
 
                 returnval = scope.create_string(s1 + s2);
             }
@@ -481,8 +464,8 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             }
             else if(left->type() == ValueType::Integer && right->type() == ValueType::Integer)
             {
-                auto i1 = dynamic_cast<IntVal*>(left)->get();
-                auto i2 = dynamic_cast<IntVal*>(right)->get();
+                auto i1 = value_cast<IntVal>(left)->get();
+                auto i2 = value_cast<IntVal>(right)->get();
 
                 returnval = scope.create_integer(i1 - i2);
             }
@@ -494,8 +477,6 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             throw std::runtime_error("Unknown binary operation");
         }
 
-        left->drop();
-        right->drop();
         break;
     }
     case NodeType::Return:
@@ -515,7 +496,6 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         {
             auto res = execute_next(scope, dummy_loop_state);
             list->append(res);
-            res->drop();
         }
 
         returnval = list;
@@ -541,7 +521,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             CompareOpType op_type;
             m_data >> op_type;
 
-            Value *rval = execute_next(scope, dummy_loop_state);
+            ValuePtr rval = execute_next(scope, dummy_loop_state);
             bool res = false;
 
             if(op_type == CompareOpType::Equals)
@@ -561,7 +541,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 if(rval->type() != ValueType::List)
                     throw std::runtime_error("Can only call in on lists");
 
-                res = dynamic_cast<const List*>(rval)->contains(*current);
+                res = value_cast<List>(rval)->contains(*current);
             }
             else if(op_type == CompareOpType::NotEqual)
             {
@@ -572,7 +552,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 if(rval->type() != ValueType::List)
                     throw std::runtime_error("Can only call in on lists");
 
-                res = !dynamic_cast<const List*>(rval)->contains(*current);
+                res = !value_cast<List>(rval)->contains(*current);
             }
             else if(op_type == CompareOpType::LessEqual)
             {
@@ -585,8 +565,6 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             else
                 throw std::runtime_error("Unknown op type");
 
-            rval->drop();
-            current->drop();
             current = scope.create_boolean(res);
         }
 
@@ -617,23 +595,15 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             args.push_back(arg);
         }
 
-        returnval = dynamic_cast<Callable*>(callable)->call(args);
-
-        for(auto arg: args)
-        {
-            arg->drop();
-        }
-
-        callable->drop();
+        returnval = value_cast<Callable>(callable)->call(args);
         break;
     }
     case NodeType::If:
     {
         auto test = execute_next(scope, loop_state);
         bool cond = test->bool_test();
-        test->drop();
 
-        Value *res = nullptr;
+        ValuePtr res = nullptr;
 
         if(cond)
             res = execute_next(scope, loop_state);
@@ -649,8 +619,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         if(test->type() != ValueType::Bool)
             throw std::runtime_error("not a boolean!");
 
-        bool cond = dynamic_cast<BoolVal*>(test)->get();
-        test->drop();
+        bool cond = value_cast<BoolVal>(test)->get();
 
         if(cond)
         {
@@ -678,7 +647,6 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             auto value = execute_next(scope, dummy_loop_state);
 
             res->insert(name, value);
-            value->drop();
         }
 
         returnval = res;
@@ -691,19 +659,14 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
 
         if(val->type() == ValueType::Dictionary && slice->type() == ValueType::String)
         {
-            returnval = dynamic_cast<Dictionary*>(val)->get(dynamic_cast<StringVal*>(slice)->get());
+            returnval = value_cast<Dictionary>(val)->get(value_cast<StringVal>(slice)->get());
         }
         else if(val->type() == ValueType::List && slice->type() == ValueType::Integer)
         {
-             returnval = dynamic_cast<List*>(val)->get(dynamic_cast<IntVal*>(slice)->get());
+             returnval = value_cast<List>(val)->get(value_cast<IntVal>(slice)->get());
         }
         else
             throw std::runtime_error("Invalid subscript");
-
-        returnval->raise();
-
-        slice->drop();
-        val->drop();
 
         break;
     }
@@ -719,9 +682,6 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             auto test = execute_next(scope, dummy_loop_state);
             bool cond = test && test->bool_test();
             
-            if(test)
-                test->drop();
-
             if(!cond)
             {
                 skip_next();
@@ -735,18 +695,19 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
     }
     case NodeType::ForLoop:
     {
-        std::vector<std::string> names = read_names();
+        const std::vector<std::string> names = read_names();
         LoopState for_loop_state = LoopState::TopLevel;
 
         auto obj = execute_next(scope, dummy_loop_state);
-        Iterator *iter = nullptr;
+        IteratorPtr iter = nullptr;
 
         if(obj->is_generator())
-            iter = dynamic_cast<Iterator*>(obj);
+        {
+            iter = value_cast<Iterator>(obj);
+        }
         else if(obj->can_iterate())
         {
-            iter = dynamic_cast<IterateableValue*>(obj)->iterate();
-            obj->drop();
+            iter = value_cast<IterateableValue>(obj)->iterate();
         }
 
         if(!iter)
@@ -755,7 +716,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         while(for_loop_state != LoopState::Break)
         {
             Scope body_scope(m_mem, scope);
-            Value *next = nullptr;
+            ValuePtr next = nullptr;
 
             try {
                 next = iter->next();
@@ -769,7 +730,7 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             }
             else if(names.size() == 2)
             {
-                auto t = dynamic_cast<Tuple*>(next);
+                auto t = value_cast<Tuple>(next);
                 if(!t)
                     throw std::runtime_error("Not a tuple!");
 
@@ -779,12 +740,10 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             else
                 throw std::runtime_error("Cannot handle more than two names");
 
-            next->drop();
             execute_next(body_scope, for_loop_state);
         }
 
         skip_next();
-        iter->drop();
         break;
     }
     case NodeType::AugmentedAssign:
@@ -804,17 +763,14 @@ Value* Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             if(!target || !value || target->type() != ValueType::Integer || value->type() != ValueType::Integer)
                 throw std::runtime_error("Values need to be numerics");
 
-            auto i_target = dynamic_cast<IntVal*>(target);
-            auto i_value  = dynamic_cast<const IntVal*>(value);
+            auto i_target = value_cast<IntVal>(target);
+            auto i_value  = value_cast<IntVal>(value);
             i_target->set(i_target->get() + i_value->get());
             break;
         }
         default:
             throw std::runtime_error("Unknown binary op");
         }
-
-        value->drop();
-        target->drop();
         break;
     }
     default:
@@ -981,11 +937,15 @@ void Interpreter::skip_next()
     }
 }
 
+void Interpreter::set_module(const std::string &name, ModulePtr module)
+{
+    m_loaded_modules[name] = module;
+}
+
 void Interpreter::set_string(const std::string &name, const std::string &value)
 {
     auto s = m_global_scope->create_string(value);
     m_global_scope->set_value(name, s);
-    s->drop();
 }
 
 void Interpreter::set_list(const std::string &name, const std::vector<std::string> &list)
@@ -997,11 +957,9 @@ void Interpreter::set_list(const std::string &name, const std::vector<std::strin
         //FIXME support other types
         auto s = m_global_scope->create_string(e);
         l->append(s);
-        s->drop();
     }
 
     m_global_scope->set_value(name, l);
-    l->drop();
 }
 
 Interpreter::Interpreter(const BitStream &data)

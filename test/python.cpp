@@ -7,23 +7,36 @@ class PythonTest : public testing::Test
 {
 };
 
-class FooObj : public CppObject
+class FooObj : public Module
 {
 public:
-    Value* call_function(Scope &scopeconst std::string& funcname, const std::vector<Value*> &arguments) override
+    using Module::Module;
+
+    ValuePtr get_member(const std::string &name)
     {
-        return scope.create_integer(42);
+        auto &mem = memory_manager();
+
+        return wrap_value( new (mem) Function(mem,
+              [&](const std::vector<ValuePtr> &args) -> ValuePtr {
+                    return wrap_value(new (mem) IntVal(mem, 42));
+        }));
     }
 };
 
-class Foo2Obj : public CppObject
+class Foo2Obj : public Module
 {
 public:
-    Value* call_function(Scope &scope
-        }
+    using Module::Module;
 
-        auto i = dynamic_cast<IntVal*>(args[0]);
-        return scope.create_integer(2 * i->get());
+    ValuePtr get_member(const std::string &name)
+    {
+        auto &mem = memory_manager();
+
+        return wrap_value( new (mem) Function(mem,
+              [&](const std::vector<ValuePtr> &args) -> ValuePtr {
+                  auto i = value_cast<IntVal>(args[0]);
+                  return wrap_value(new (mem) IntVal(mem,i->get() * 2));
+        }));
     }
 };
 
@@ -85,7 +98,8 @@ TEST(PythonTest, rand2)
 TEST(PythonTest, call_cpp_with_argument)
 {
     const std::string code =
-            "f = foo.double(21)\n"
+            "from foo import double\n"
+            "f = double(21)\n"
             "if f == 42:\n"
             "	return True\n"
             "else:\n"
@@ -94,8 +108,9 @@ TEST(PythonTest, call_cpp_with_argument)
     auto doc = compile_code(code);
 
     Interpreter pyint(doc);
-    Foo2Obj foo;
-    pyint.set_object("foo", foo);
+ 
+    auto v = wrap_value(new (pyint.memory_manager()) Foo2Obj(pyint.memory_manager()));
+    pyint.set_module("foo", v);
 
     auto res = pyint.execute();
     EXPECT_EQ(res, true);
@@ -103,6 +118,7 @@ TEST(PythonTest, call_cpp_with_argument)
 TEST(PythonTest, call_cpp)
 {
     const std::string code =
+            "import foo\n"
             "f = foo.get()\n"
             "if f == 42:\n"
             "	return True\n"
@@ -112,8 +128,9 @@ TEST(PythonTest, call_cpp)
     auto doc = compile_code(code);
 
     Interpreter pyint(doc);
-    FooObj foo;
-    pyint.set_object("foo", foo);
+    
+    auto v = wrap_value(new (pyint.memory_manager()) FooObj(pyint.memory_manager()));
+    pyint.set_module("foo", v);
 
     auto res = pyint.execute();
     EXPECT_EQ(res, true);

@@ -8,12 +8,12 @@ namespace chipy
 {
 
 class Dictionary;
+typedef std::shared_ptr<Dictionary> DictionaryPtr;
 
 class DictItemIterator : public Generator
 {
 public:
     DictItemIterator(MemoryManager &mem, Dictionary &dict);
-    ~DictItemIterator();
 
     ValuePtr next() throw(stop_iteration_exception) override;
 
@@ -21,7 +21,7 @@ public:
 
 private:
     Dictionary &m_dict;
-    std::map<std::string, Value*>::iterator m_it;
+    std::map<std::string, ValuePtr>::iterator m_it;
 };
 
 class DictItems : public Callable //public IterateableValue, public Callable
@@ -36,7 +36,7 @@ public:
         return ValueType::DictItems;
     }
 
-    ValuePtr call(const std::vector<Value*>& args) override
+    ValuePtr call(const std::vector<ValuePtr>& args) override
     {
         if(args.size() != 0)
             throw std::runtime_error("invalid number of arguments");
@@ -46,7 +46,7 @@ public:
 
     ValuePtr duplicate() override;
 
-    Iterator* iterate();
+    IteratorPtr iterate();
 
 //    uint32_t size() const override;
 
@@ -54,36 +54,38 @@ private:
     Dictionary &m_dict;
 };
 
+typedef std::shared_ptr<DictItems> DictItemsPtr;
+
 class DictKeyIterator : public Generator
 {
 public:
     DictKeyIterator(MemoryManager &mem, Dictionary &dict);
-    ~DictKeyIterator();
 
-    Value* next() throw(stop_iteration_exception) override;
+    ValuePtr next() throw(stop_iteration_exception) override;
 
     ValuePtr duplicate() override;
 
 private:
     Dictionary &m_dict;
-    std::map<std::string, Value*>::iterator m_it;
+    std::map<std::string, ValuePtr>::iterator m_it;
 };
 
 class Dictionary : public IterateableValue
 {
 public:
-    using IterateableValue::IterateableValue;
-    ~Dictionary();
+    Dictionary(MemoryManager &mem)
+        : IterateableValue(mem)
+    {}
 
-    Iterator* iterate();
+    IteratorPtr iterate() override;
 
-    Value* get(const std::string &key);
+    ValuePtr get(const std::string &key);
 
-    DictItems *items();
+    DictItemsPtr items();
 
     uint32_t size() const;
 
-    void insert(const std::string &key, Value *value);
+    void insert(const std::string &key, ValuePtr value);
 
     ValueType type() const override;
 

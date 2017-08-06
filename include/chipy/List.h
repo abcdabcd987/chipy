@@ -6,12 +6,12 @@ namespace chipy
 {
 
 class List;
+typedef std::shared_ptr<List> ListPtr;
 
 class ListIterator : public Generator
 {
 public:
     ListIterator(MemoryManager& mem, List &list);
-    ~ListIterator();
 
     ValuePtr next() throw(stop_iteration_exception) override;
 
@@ -29,8 +29,6 @@ public:
         : IterateableValue(mem)
     {}
 
-    ~List();
-
     IteratorPtr iterate() override;
 
     ValuePtr duplicate() override;
@@ -43,12 +41,12 @@ public:
 
     ValueType type() const override;
 
-    void append(Value *val);
+    void append(ValuePtr val);
 
-    const std::vector<Value*>& elements() const;
+    const std::vector<ValuePtr>& elements() const;
 
 private:
-    std::vector<Value*> m_elements;
+    std::vector<ValuePtr> m_elements;
 };
 
 }

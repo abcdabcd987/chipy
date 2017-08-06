@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <vector>
 
 namespace chipy
 {
@@ -16,8 +17,17 @@ public:
     void free(void* ptr);
 
 private:
-    uint8_t *data;
-    size_t size;
+    std::vector<uint8_t> m_buffer;
+    size_t   m_buffer_pos;
+
+    struct AllocInfo
+    {
+        size_t size;
+    };
+
+    void resize(size_t new_size);
+
+    std::unordered_map<intptr_t, AllocInfo> m_allocs;
 };
 
 class Object

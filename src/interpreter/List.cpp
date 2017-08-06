@@ -3,38 +3,29 @@
 namespace chipy
 {
 
-List::~List()
-{
-    for(auto elem : m_elements)
-        elem->drop();
-}
-
 IteratorPtr List::iterate()
 {
-    return new (memory_manager()) ListIterator(memory_manager(), *this);
+    return wrap_value(new (memory_manager()) ListIterator(memory_manager(), *this));
 }
 
 ValuePtr List::duplicate()
 {
-    auto d = new (memory_manager()) List(memory_manager());
+    auto d = wrap_value(new (memory_manager()) List(memory_manager()));
 
     for(auto elem: m_elements)
     {
-        elem->raise();
         d->append(elem);
     }
 
     return d;
 }
 
-Value* List::get(uint32_t index)
+ValuePtr List::get(uint32_t index)
 {
     if(index >= size())
         throw std::runtime_error("List index out of range");
 
-    auto elem = m_elements[index];
-    elem->raise();
-    return elem;
+    return m_elements[index];
 }
 
 uint32_t List::size() const
@@ -42,7 +33,7 @@ uint32_t List::size() const
     return m_elements.size();
 }
 
-const std::vector<Value*>& List::elements() const
+const std::vector<ValuePtr>& List::elements() const
 {
     return m_elements;
 }
@@ -63,21 +54,14 @@ ValueType List::type() const
     return ValueType::List;
 }
 
-void List::append(Value *val)
+void List::append(ValuePtr val)
 {
-    val->raise();
     m_elements.push_back(val);
 }
 
 ListIterator::ListIterator(MemoryManager &mem, List &list)
     : Generator(mem), m_list(list), m_pos(0)
 {
-    m_list.raise();
-}
-
-ListIterator::~ListIterator()
-{
-    m_list.drop();
 }
 
 ValuePtr ListIterator::next() throw(stop_iteration_exception)
@@ -93,7 +77,7 @@ ValuePtr ListIterator::next() throw(stop_iteration_exception)
 
 ValuePtr ListIterator::duplicate()
 {
-    return new (memory_manager()) ListIterator(memory_manager(), m_list);
+    return ValuePtr(new (memory_manager()) ListIterator(memory_manager(), m_list));
 }
 
 }

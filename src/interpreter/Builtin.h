@@ -23,7 +23,7 @@ public:
 
     ValuePtr duplicate() override
     {
-        return new (memory_manager()) Builtin(memory_manager(), m_type);
+        return ValuePtr(new (memory_manager()) Builtin(memory_manager(), m_type));
     }
 
     ValueType type() const override
@@ -31,7 +31,7 @@ public:
         return ValueType::Builtin;
     }
 
-    Value* call(const std::vector<Value*> &args) override
+    ValuePtr call(const std::vector<ValuePtr> &args) override
     {
         if(m_type == BuiltinType::Range)
         {
@@ -44,7 +44,7 @@ public:
             if(arg == nullptr || arg->type() != ValueType::Integer)
                 throw std::runtime_error("invalid argument type");
 
-            return new (memory_manager()) RangeIterator(memory_manager(), 0, dynamic_cast<const IntVal*>(arg)->get(), 1);
+            return ValuePtr(new (memory_manager()) RangeIterator(memory_manager(), 0, value_cast<IntVal>(arg)->get(), 1));
         }
         else if(m_type == BuiltinType::MakeString)
         {
@@ -53,13 +53,14 @@ public:
 
             auto arg = args[0];
             if(arg->type() == ValueType::String)
+            {
                 return arg;
+            }
             else if(arg->type() == ValueType::Integer)
             {
-                auto i = dynamic_cast<const IntVal*>(arg)->get();
-                arg->drop();
+                auto i = value_cast<IntVal>(arg)->get();
 
-                return new (memory_manager()) StringVal(memory_manager(), std::to_string(i));
+                return wrap_value(new (memory_manager()) StringVal(memory_manager(), std::to_string(i)));
             }
             else
                 throw std::runtime_error("Can't conver to integer");
@@ -72,14 +73,14 @@ public:
 
             auto arg = args[0];
             if(arg->type() == ValueType::Integer)
+            {
                 return arg;
+            }
             else if(arg->type() == ValueType::String)
             {
-                std::string s = dynamic_cast<StringVal*>(arg)->get();
-                arg->drop();
-
+                std::string s = value_cast<StringVal>(arg)->get();
                 char *endptr = nullptr;
-                return new (memory_manager()) IntVal(memory_manager(), strtol(s.c_str(), &endptr, 10));
+                return wrap_value(new (memory_manager()) IntVal(memory_manager(), strtol(s.c_str(), &endptr, 10)));
             }
             else
                 throw std::runtime_error("Can't conver to integer");
@@ -95,9 +96,9 @@ public:
                 throw std::runtime_error("Argument not a string");
 
 #ifdef IS_ENCLAVE
-            log_info("Program says: " + dynamic_cast<StringVal*>(arg)->get());
+            log_info("Program says: " + value_cast<StringVal>(arg)->get());
 #else
-            LOG(INFO) << "Program says: " << dynamic_cast<StringVal*>(arg)->get();
+            LOG(INFO) << "Program says: " << value_cast<StringVal>(arg)->get();
 #endif
         }
         else
