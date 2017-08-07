@@ -37,6 +37,13 @@ std::shared_ptr<T> wrap_value(T *val)
     return std::shared_ptr<T>{val};
 }
 
+template<typename T, class... Args>
+std::shared_ptr<T> make_value(MemoryManager &mem, Args... args)
+{
+    auto val = new (mem) T(mem, args...);
+    return wrap_value(val);
+}
+
 class Value : public Object
 {
 public:

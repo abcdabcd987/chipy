@@ -16,10 +16,10 @@ public:
     {
         auto &mem = memory_manager();
 
-        return wrap_value( new (mem) Function(mem,
+        return make_value<Function>(mem,
               [&](const std::vector<ValuePtr> &args) -> ValuePtr {
                     return wrap_value(new (mem) IntVal(mem, 42));
-        }));
+        });
     }
 };
 
@@ -32,11 +32,11 @@ public:
     {
         auto &mem = memory_manager();
 
-        return wrap_value( new (mem) Function(mem,
+        return make_value<Function>(mem, 
               [&](const std::vector<ValuePtr> &args) -> ValuePtr {
                   auto i = value_cast<IntVal>(args[0]);
                   return wrap_value(new (mem) IntVal(mem,i->get() * 2));
-        }));
+        });
     }
 };
 
