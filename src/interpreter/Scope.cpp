@@ -34,7 +34,7 @@ bool Scope::has_value(const std::string &id) const
 
 ValuePtr Scope::get_value(const std::string &id)
 {
-    Value* val;
+    Value* val = nullptr;
 
     if(id == BUILTIN_STR_NONE)
         return std::shared_ptr<Value>{nullptr};

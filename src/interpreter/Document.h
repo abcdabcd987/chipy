@@ -10,7 +10,7 @@ public:
         : m_scope(scope)
     {}
 
-    Value* get_result()
+    ValuePtr get_result()
     {
         // Not a valid document?
         if(parse_stack.size() != 1)
@@ -129,7 +129,7 @@ private:
         }
     }
 
-    std::stack<Value*> parse_stack;
+    std::stack<ValuePtr> parse_stack;
 
 private:
     Scope &m_scope;

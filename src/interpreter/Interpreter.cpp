@@ -581,6 +581,10 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         int32_t val;
         m_data >> val;
         returnval = scope.create_integer(val);
+        break;
+    }
+    case NodeType::Call:
+    {
         auto callable = execute_next(scope, dummy_loop_state);
         if(!callable->is_callable())
             throw std::runtime_error("Cannot call un-callable!");

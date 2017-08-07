@@ -9,6 +9,8 @@ namespace chipy
 class MemoryManager
 {
 public:
+    static constexpr size_t PAGE_SIZE = 1024*1024;
+
     MemoryManager();
 
     MemoryManager(MemoryManager &other) = delete;
@@ -17,11 +19,13 @@ public:
     void free(void* ptr);
 
 private:
-    std::vector<uint8_t> m_buffer;
-    size_t   m_buffer_pos;
+    uint8_t *m_buffer;
+ //   std::vector<uint8_t> m_buffer;
+    size_t m_buffer_pos;
 
     struct AllocInfo
     {
+//        page_id_t page;
         size_t size;
     };
 
