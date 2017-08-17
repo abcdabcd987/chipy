@@ -1,7 +1,5 @@
 #include <chipy/Object.h>
 
-#include <glog/logging.h>
-
 namespace chipy
 {
 

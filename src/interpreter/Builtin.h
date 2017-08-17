@@ -1,6 +1,9 @@
 #pragma once
 
+#ifndef IS_ENCLAVE
 #include <glog/logging.h>
+#endif
+
 #include "RangeIterator.h"
 
 namespace chipy
@@ -95,10 +98,10 @@ public:
             if(arg->type() != ValueType::String)
                 throw std::runtime_error("Argument not a string");
 
-#ifdef IS_ENCLAVE
-            log_info("Program says: " + value_cast<StringVal>(arg)->get());
-#else
+#ifndef IS_ENCLAVE
             LOG(INFO) << "Program says: " << value_cast<StringVal>(arg)->get();
+#else
+    // FIXME        LOG(INFO) << "Program says: " << value_cast<StringVal>(arg)->get();
 #endif
         }
         else

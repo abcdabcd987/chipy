@@ -13,7 +13,7 @@ class ListIterator : public Generator
 public:
     ListIterator(MemoryManager& mem, List &list);
 
-    ValuePtr next() throw(stop_iteration_exception) override;
+    ValuePtr next() override;
 
     ValuePtr duplicate() override;
 

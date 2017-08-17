@@ -64,7 +64,7 @@ ListIterator::ListIterator(MemoryManager &mem, List &list)
 {
 }
 
-ValuePtr ListIterator::next() throw(stop_iteration_exception)
+ValuePtr ListIterator::next() 
 {
     if(m_pos >= m_list.size())
         throw stop_iteration_exception();

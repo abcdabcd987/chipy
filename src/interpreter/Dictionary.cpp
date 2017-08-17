@@ -9,7 +9,7 @@ DictItemIterator::DictItemIterator(MemoryManager &mem, Dictionary &dict)
 {
 }
 
-ValuePtr DictItemIterator::next() throw(stop_iteration_exception)
+ValuePtr DictItemIterator::next() 
 {
     if(m_it == m_dict.elements().end())
         throw stop_iteration_exception();
@@ -35,7 +35,7 @@ DictItemsPtr Dictionary::items()
     return wrap_value(new (memory_manager()) DictItems(memory_manager(), *this));
 }
 
-ValuePtr DictKeyIterator::next() throw(stop_iteration_exception)
+ValuePtr DictKeyIterator::next() 
 {
     if(m_it == m_dict.elements().end())
         throw stop_iteration_exception();

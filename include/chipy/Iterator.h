@@ -17,7 +17,7 @@ public:
         return false;
     }
 
-    virtual ValuePtr next() throw(stop_iteration_exception) = 0;
+    virtual ValuePtr next() = 0;
 
     ValueType type() const override
     {

@@ -1,6 +1,5 @@
 #include <memory>
 #include <map>
-#include <glog/logging.h>
 
 #include "chipy/Interpreter.h"
 #include "chipy/Callable.h"

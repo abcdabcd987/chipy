@@ -20,7 +20,7 @@ public:
         return wrap_value(new (memory_manager()) RangeIterator(memory_manager(), m_start, m_end, m_step_size));
     }
 
-    ValuePtr next() throw(stop_iteration_exception) override
+    ValuePtr next() override
     {
         if(m_pos >= m_end)
             throw stop_iteration_exception();

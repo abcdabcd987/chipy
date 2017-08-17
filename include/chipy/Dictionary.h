@@ -15,7 +15,7 @@ class DictItemIterator : public Generator
 public:
     DictItemIterator(MemoryManager &mem, Dictionary &dict);
 
-    ValuePtr next() throw(stop_iteration_exception) override;
+    ValuePtr next() override;
 
     ValuePtr duplicate() override;
 
@@ -61,7 +61,7 @@ class DictKeyIterator : public Generator
 public:
     DictKeyIterator(MemoryManager &mem, Dictionary &dict);
 
-    ValuePtr next() throw(stop_iteration_exception) override;
+    ValuePtr next() override;
 
     ValuePtr duplicate() override;
 
