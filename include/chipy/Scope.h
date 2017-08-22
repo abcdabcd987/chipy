@@ -26,16 +26,6 @@ public:
     void terminate();
     bool is_terminated() const;
 
-    IntValPtr create_integer(const int32_t value);
-    ValuePtr create_document(const json::Document &doc);
-    DictionaryPtr create_dictionary();
-    StringValPtr create_string(const std::string &str);
-    TuplePtr create_tuple(ValuePtr first, ValuePtr second);
-    FloatValPtr create_float(const double &f);
-    BoolValPtr create_boolean(const bool value);
-    ListPtr create_list();
-    ValuePtr create_none();
-
 private:
     Scope *m_parent;
     bool m_terminated = false;

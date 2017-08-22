@@ -72,45 +72,7 @@ bool Scope::is_terminated() const
     return m_terminated;
 }
 
-TuplePtr Scope::create_tuple(ValuePtr first, ValuePtr second)
-{
-    return wrap_value<Tuple>(new (memory_manager()) Tuple(memory_manager(), first, second));
-}
 
-StringValPtr Scope::create_string(const std::string &str)
-{
-    return wrap_value<StringVal>(new (memory_manager()) StringVal(memory_manager(), str));
-}
-
-IntValPtr Scope::create_integer(const int32_t value)
-{
-    return wrap_value<IntVal>(new (memory_manager()) IntVal(memory_manager(), value));
-}
-
-BoolValPtr Scope::create_boolean(const bool value)
-{
-    return wrap_value<BoolVal>(new (memory_manager()) BoolVal(memory_manager(), value));
-}
-
-DictionaryPtr Scope::create_dictionary()
-{
-    return wrap_value<Dictionary>(new (memory_manager()) Dictionary(memory_manager()));
-}
-
-FloatValPtr Scope::create_float(const double& value)
-{
-    return wrap_value<FloatVal>(new (memory_manager()) FloatVal(memory_manager(), value));
-}
-
-ValuePtr Scope::create_none()
-{
-    return std::shared_ptr<Value>{ nullptr };
-}
-
-ListPtr Scope::create_list()
-{
-    return wrap_value<List>(new (memory_manager()) List(memory_manager()));
-}
 
 }
 

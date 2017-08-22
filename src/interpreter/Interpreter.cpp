@@ -228,9 +228,9 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         m_data >> str;
 
         if(str == "False")
-            returnval = scope.create_boolean(false);
+            returnval = m_mem.create_boolean(false);
         else if(str == "True")
-            returnval = scope.create_boolean(true);
+            returnval = m_mem.create_boolean(true);
         else
             returnval = scope.get_value(str);
         break;
@@ -321,7 +321,7 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             switch(type)
             {
             case UnaryOpType::Not:
-                returnval = scope.create_boolean(!cond);
+                returnval = m_mem.create_boolean(!cond);
                 break;
             default:
                 throw std::runtime_error("Unknown unary operation");
@@ -334,10 +334,10 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             switch(type)
             {
             case UnaryOpType::Sub:
-                returnval = scope.create_integer((-1)*i);
+                returnval = m_mem.create_integer((-1)*i);
                 break;
             case UnaryOpType::Not:
-                returnval = scope.create_boolean(false);
+                returnval = m_mem.create_boolean(false);
                 break;
             default:
                 throw std::runtime_error("Unknown unary operation");
@@ -348,7 +348,7 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             switch(type)
             {
             case UnaryOpType::Not:
-                returnval = scope.create_boolean(res == nullptr);
+                returnval = m_mem.create_boolean(res == nullptr);
                 break;
             default:
                 throw std::runtime_error("Unknonw unary op");
@@ -421,7 +421,7 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         else
             throw std::runtime_error("unknown bool op type");
 
-        returnval = scope.create_boolean(res);
+        returnval = m_mem.create_boolean(res);
         break;
     }
     case NodeType::BinaryOp:
@@ -441,20 +441,35 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 auto i1 = value_cast<IntVal>(left)->get();
                 auto i2 = value_cast<IntVal>(right)->get();
 
-                returnval = scope.create_integer(i1 + i2);
+                returnval = m_mem.create_integer(i1 + i2);
             }
             else if(left->type() == ValueType::String && right->type() == ValueType::String)
             {
                 auto s1 = value_cast<StringVal>(left)->get();
                 auto s2 = value_cast<StringVal>(right)->get();
 
-                returnval = scope.create_string(s1 + s2);
+                returnval = m_mem.create_string(s1 + s2);
             }
             else
                 throw std::runtime_error("failed to add");
 
             break;
         }
+        case BinaryOpType::Mult:
+        {
+            if(left->type() == ValueType::Integer && right->type() == ValueType::Integer)
+            {
+                auto i1 = value_cast<IntVal>(left)->get();
+                auto i2 = value_cast<IntVal>(right)->get();
+
+                returnval = m_mem.create_integer(i1 * i2);
+            }
+            else
+                throw std::runtime_error("failed to multiply");
+
+            break;
+        }
+ 
         case BinaryOpType::Sub:
         {
             if(!left || !right)
@@ -466,7 +481,7 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
                 auto i1 = value_cast<IntVal>(left)->get();
                 auto i2 = value_cast<IntVal>(right)->get();
 
-                returnval = scope.create_integer(i1 - i2);
+                returnval = m_mem.create_integer(i1 - i2);
             }
             else
                 throw std::runtime_error("failed to sub");
@@ -486,7 +501,7 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
     }
     case NodeType::List:
     {
-        auto list = scope.create_list();
+        auto list = m_mem.create_list();
 
         uint32_t size = 0;
         m_data >> size;
@@ -505,7 +520,7 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         std::string str;
         m_data >> str;
 
-        returnval = scope.create_string(str);
+        returnval = m_mem.create_string(str);
         break;
     }
     case NodeType::Compare:
@@ -564,7 +579,7 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
             else
                 throw std::runtime_error("Unknown op type");
 
-            current = scope.create_boolean(res);
+            current = m_mem.create_boolean(res);
         }
 
         returnval = current;
@@ -579,7 +594,7 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
     {
         int32_t val;
         m_data >> val;
-        returnval = scope.create_integer(val);
+        returnval = m_mem.create_integer(val);
         break;
     }
     case NodeType::Call:
@@ -639,7 +654,7 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
     }
     case NodeType::Dictionary:
     {
-        auto res = scope.create_dictionary();
+        auto res = m_mem.create_dictionary();
 
         uint32_t size;
         m_data >> size;
@@ -947,18 +962,18 @@ void Interpreter::set_module(const std::string &name, ModulePtr module)
 
 void Interpreter::set_string(const std::string &name, const std::string &value)
 {
-    auto s = m_global_scope->create_string(value);
+    auto s = m_mem.create_string(value);
     m_global_scope->set_value(name, s);
 }
 
 void Interpreter::set_list(const std::string &name, const std::vector<std::string> &list)
 {
-    auto l = m_global_scope->create_list();
+    auto l = m_mem.create_list();
     
     for(auto &e: list)
     {
         //FIXME support other types
-        auto s = m_global_scope->create_string(e);
+        auto s = m_mem.create_string(e);
         l->append(s);
     }
 

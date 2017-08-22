@@ -40,7 +40,7 @@ std::shared_ptr<T> wrap_value(T *val)
 template<typename T, class... Args>
 std::shared_ptr<T> make_value(MemoryManager &mem, Args&&... args)
 {
-    auto val = new (mem) T(mem, args...);
+    auto val = new (mem) T(mem, std::forward<Args>(args)...);
     return wrap_value(val);
 }
 
@@ -229,7 +229,5 @@ inline bool operator==(const Value &first, const Value &second)
     else
         return false;
 }
-
-json::Document value_to_bdoc(const Value &value);
 
 }

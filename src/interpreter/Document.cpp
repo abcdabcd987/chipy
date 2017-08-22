@@ -4,21 +4,21 @@
 namespace chipy
 {
 
-void value_to_bdoc(const std::string &key, const Value &value, json::Writer &writer)
+void value_to_bdoc(const std::string &key, ValuePtr value, json::Writer &writer)
 {
-    switch(value.type())
+    switch(value->type())
     {
     case ValueType::Dictionary:
     {
-        auto &dict = dynamic_cast<const Dictionary&>(value);
+        auto dict = value_cast<Dictionary>(value);
         writer.start_map(key);
 
-        for(auto &e : dict.elements())
+        for(auto &e : dict->elements())
         {
             auto &key = e.first;
             auto &value = e.second;
 
-            value_to_bdoc(key, *value, writer);
+            value_to_bdoc(key, value, writer);
         }
 
         writer.end_map();
@@ -26,14 +26,14 @@ void value_to_bdoc(const std::string &key, const Value &value, json::Writer &wri
     }
     case ValueType::String:
     {
-        auto &str = dynamic_cast<const StringVal&>(value);
-        writer.write_string(key, str.get());
+        auto str = value_cast<StringVal>(value);
+        writer.write_string(key, str->get());
         break;
     }
     case ValueType::Integer:
     {
-        auto &i = dynamic_cast<const IntVal&>(value);
-        writer.write_integer(key, i.get());
+        auto i = value_cast<IntVal>(value);
+        writer.write_integer(key, i->get());
         break;
     }
     default:
@@ -41,7 +41,7 @@ void value_to_bdoc(const std::string &key, const Value &value, json::Writer &wri
     }
 }
 
-json::Document value_to_bdoc(const Value &value)
+json::Document value_to_document(ValuePtr value)
 {
     json::Writer writer;
     value_to_bdoc("", value, writer);
