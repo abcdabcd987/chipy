@@ -727,8 +727,7 @@ ValuePtr Interpreter::execute_next(Scope &scope, LoopState &loop_state)
         {
             iter = value_cast<IterateableValue>(obj)->iterate();
         }
-
-        if(!iter)
+        else
             throw std::runtime_error("Can't iterate");
 
         while(for_loop_state != LoopState::Break)
