@@ -44,4 +44,4 @@ chipy_sgx = static_library('chipy_sgx', interpreter_cpp_files,
 
 install_subdir('include/chipy', install_dir : 'include')
 
-executable('chipy-test', test_cpp_files, dependencies: [gtest], link_with: chipy, include_directories: inc_dirs)
+executable('chipy-test', test_cpp_files, dependencies: [gtest, json_dep], link_with: chipy, include_directories: inc_dirs)

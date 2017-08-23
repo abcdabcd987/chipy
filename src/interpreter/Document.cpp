@@ -1,5 +1,6 @@
 #include "chipy/Value.h"
 #include "chipy/Dictionary.h"
+#include "chipy/List.h"
 
 namespace chipy
 {
@@ -19,6 +20,19 @@ void value_to_bdoc(const std::string &key, ValuePtr value, json::Writer &writer)
             auto &value = e.second;
 
             value_to_bdoc(key, value, writer);
+        }
+
+        writer.end_map();
+        break;
+    }
+    case ValueType::List:
+    {
+        auto l = value_cast<List>(value);
+        writer.start_array(key);
+
+        for(auto &e : l->elements())
+        {
+            value_to_bdoc("", e, writer);
         }
 
         writer.end_map();

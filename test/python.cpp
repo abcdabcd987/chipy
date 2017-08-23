@@ -115,6 +115,7 @@ TEST(PythonTest, call_cpp_with_argument)
     auto res = pyint.execute();
     EXPECT_EQ(res, true);
 }
+
 TEST(PythonTest, call_cpp)
 {
     const std::string code =
@@ -386,6 +387,19 @@ TEST(PythonTest, set_variable)
     auto res = pyint.execute();
 
     EXPECT_EQ(res, false);
+}
+
+TEST(PythonTest, document_to_value)
+{
+    MemoryManager mem;
+    
+    json::Document doc("{ \"a\": 1, \"b\": 2}");
+
+    auto val = mem.create_from_document(doc);
+
+    auto dic = value_cast<Dictionary>(val);
+
+    EXPECT_EQ(dic->size(), 2);
 }
 
 TEST(PythonTest, pre_set_value)
