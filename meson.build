@@ -1,6 +1,7 @@
 project('chipy', 'cpp', default_options: ['cpp_std=c++1z'])
 
-inc_dirs = include_directories('/usr/local/include', './include/')
+inc_dirs = include_directories(get_option('prefix') + '/include', '/usr/local/include', './include/')
+prefix_library_path=[get_option('prefix')+'/lib/x86_64-linux-gnu', get_option('prefix')+'/lib', '/usr/local/lib', '/usr/local/lib/x86_64-linux-gnu']
 
 subdir('./src/compiler')
 subdir('./src/interpreter')
@@ -11,8 +12,8 @@ gmock = dependency('gmock')
 
 cpp = meson.get_compiler('cpp')
 log_dep = cpp.find_library('glog')
-json_dep = cpp.find_library('document')
-pypa_dep = cpp.find_library('pypa')
+json_dep = cpp.find_library('document', dirs: prefix_library_path)
+pypa_dep = cpp.find_library('pypa', dirs: prefix_library_path)
 
 chipy = shared_library('chipy', [compiler_cpp_files, interpreter_cpp_files], include_directories: inc_dirs, dependencies: [log_dep, json_dep, pypa_dep], install: true)
 
@@ -28,7 +29,7 @@ cpp = meson.get_compiler('cpp')
 
 sgx_tstdc_dep = cpp.find_library('sgx_tstdc', dirs: sgx_library_path)
 sgx_tstdcxx_dep = cpp.find_library('sgx_tcxx', dirs: sgx_library_path)
-json_sgx_dep = cpp.find_library('document_sgx')
+json_sgx_dep = cpp.find_library('document_sgx', dirs: prefix_library_path)
 
 sgx_compile_args = ['-DIS_ENCLAVE', '-nostdinc', '-fstack-protector', '-pie', '-UNDEBUG', '-UEDEBUG']
 
@@ -44,4 +45,4 @@ chipy_sgx = static_library('chipy_sgx', interpreter_cpp_files,
 
 install_subdir('include/chipy', install_dir : 'include')
 
-executable('chipy-test', test_cpp_files, dependencies: [gtest, json_dep], link_with: chipy, include_directories: inc_dirs)
+executable('chipy-test', test_cpp_files, dependencies: [gtest, json_dep, pypa_dep], link_with: chipy, include_directories: inc_dirs)
